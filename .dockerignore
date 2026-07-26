@@ -1,0 +1,9 @@
+.git
+.github
+.artifacts
+dist
+deploy
+docs
+scripts
+test
+*.md

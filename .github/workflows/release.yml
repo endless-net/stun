@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.mod
+      - name: Validate semantic version
+        shell: bash
+        run: |
+          [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
+      - name: Verify merged PR provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/verify-production-provenance.sh --version "$GITHUB_REF_NAME"
+      - name: Verify release source
+        run: ./scripts/verify.sh
+      - name: Build release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          ldflags="-s -w -X main.version=${GITHUB_REF_NAME} -X main.commit=${GITHUB_SHA} -X main.buildDate=${build_date}"
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -ldflags "$ldflags" -o "dist/endlessnet-stun_${GITHUB_REF_NAME}_linux_${arch}" ./cmd/endlessnet-stun
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -o "dist/endlessnet-stun-smoke_${GITHUB_REF_NAME}_linux_${arch}" ./cmd/endlessnet-stun-smoke
+          done
+          cp LICENSE NOTICE THIRD_PARTY_NOTICES dist/
+          (cd dist && sha256sum endlessnet-stun* > checksums.txt)
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Derive immutable image tags
+        id: tags
+        shell: bash
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          major=${version%%.*}
+          remainder=${version#*.}
+          minor=${remainder%%.*}
+          {
+            echo "tags<<EOF"
+            echo "ghcr.io/${GITHUB_REPOSITORY}:${GITHUB_REF_NAME}"
+            echo "ghcr.io/${GITHUB_REPOSITORY}:${major}.${minor}"
+            echo "ghcr.io/${GITHUB_REPOSITORY}:${major}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          files: dist/*
+          generate_release_notes: true
+
+  deploy-production:
+    if: ${{ vars.STUN_AUTO_DEPLOY_AFTER_RELEASE == 'true' }}
+    needs: release
+    uses: ./.github/workflows/deploy-production.yml
+    with:
+      version: ${{ github.ref_name }}
+      target_host_or_group: ${{ vars.STUN_TARGETS }}
+      stun_endpoints: ${{ vars.STUN_ENDPOINTS }}
+      metrics_bind_address: 127.0.0.1:9090
+      deployment_strategy: rolling
+    secrets: inherit

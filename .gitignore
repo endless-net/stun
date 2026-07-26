@@ -1,0 +1,6 @@
+/.artifacts/
+/dist/
+/build/
+coverage.out
+*.exe
+*.test
