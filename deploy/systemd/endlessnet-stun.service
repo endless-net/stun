@@ -1,0 +1,35 @@
+[Unit]
+Description=EndlessNet STUN service
+Documentation=https://github.com/unng-lab/endlessnet-stun
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=endlessnet-stun
+Group=endlessnet-stun
+EnvironmentFile=/etc/endlessnet-stun/stun.env
+ExecStart=/opt/endlessnet-stun/current/endlessnet-stun
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=10s
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_INET AF_INET6
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

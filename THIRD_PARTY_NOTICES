@@ -1,0 +1,6 @@
+Third-party components
+======================
+
+The EndlessNet STUN service currently uses only the Go standard library at
+runtime. CI regenerates and validates the dependency license report for every
+public change.
