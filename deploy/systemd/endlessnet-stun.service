@@ -1,6 +1,6 @@
 [Unit]
 Description=EndlessNet STUN service
-Documentation=https://github.com/unng-lab/endlessnet-stun
+Documentation=https://github.com/endless-net/stun
 After=network-online.target
 Wants=network-online.target
 

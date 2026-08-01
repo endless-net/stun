@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/unng-lab/endlessnet-stun/internal/metrics"
+	"github.com/endless-net/stun/internal/metrics"
 )
 
 func TestHealthReadinessAndMetrics(t *testing.T) {

@@ -27,7 +27,7 @@
 | Область | Владелец |
 | --- | --- |
 | STUN-код, тесты, бинарники, образ, systemd unit, release и deploy workflow | Этот репозиторий |
-| Список публичных STUN endpoints и клиентское поведение | Репозиторий `unng-lab/endlessnet` |
+| Список публичных STUN endpoints и клиентское поведение | Репозиторий `endless-net/endlessnet` |
 | Сбор метрик, их хранение, алерты и дашборды | Внешняя observability-инфраструктура |
 | DNS, firewall/security groups и доступность хоста | Инфраструктура окружения |
 

@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/unng-lab/endlessnet-stun/internal/stun"
+	"github.com/endless-net/stun/internal/stun"
 )
 
 func TestStandaloneBinaryEndToEnd(t *testing.T) {
