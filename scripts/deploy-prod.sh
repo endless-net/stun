@@ -42,7 +42,7 @@ if (( ${#targets[@]} == 0 || ${#targets[@]} != ${#endpoints[@]} )); then
 fi
 
 deploy_user=${DEPLOY_USER:-root}
-repo=${GITHUB_REPOSITORY:-unng-lab/endlessnet-stun}
+repo=${GITHUB_REPOSITORY:-endless-net/stun}
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 gh release download "$version" --repo "$repo" --pattern checksums.txt --dir "$work"

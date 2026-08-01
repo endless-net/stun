@@ -49,7 +49,7 @@ printf '%s\n' "${FAKE_MERGED_PR_COUNT:-0}"
 		cmd.Dir = work
 		cmd.Env = append(os.Environ(),
 			"GH_BIN="+fakeGH,
-			"GITHUB_REPOSITORY=unng-lab/endlessnet-stun",
+			"GITHUB_REPOSITORY=endless-net/stun",
 			"FAKE_MERGED_PR_COUNT="+mergedPRCount,
 		)
 		output, runErr := cmd.CombinedOutput()

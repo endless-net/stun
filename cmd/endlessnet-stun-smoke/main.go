@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/unng-lab/endlessnet-stun/internal/stun"
+	"github.com/endless-net/stun/internal/stun"
 )
 
 type result struct {

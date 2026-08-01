@@ -337,7 +337,7 @@ esac
 		"FAKE_RELEASE_DIR="+releaseDir,
 		"FAKE_DEPLOY_LOG="+logPath,
 		"DEPLOY_USER=deploy",
-		"GITHUB_REPOSITORY=unng-lab/endlessnet-stun",
+		"GITHUB_REPOSITORY=endless-net/stun",
 		"SMOKE_BINARY="+smoke,
 	)
 	runDeploy := func(endpoints string) error {
