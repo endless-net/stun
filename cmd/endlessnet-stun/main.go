@@ -12,11 +12,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/unng-lab/endlessnet-stun/internal/config"
-	"github.com/unng-lab/endlessnet-stun/internal/health"
-	"github.com/unng-lab/endlessnet-stun/internal/metrics"
-	"github.com/unng-lab/endlessnet-stun/internal/ratelimit"
-	"github.com/unng-lab/endlessnet-stun/internal/stun"
+	"github.com/endless-net/stun/internal/config"
+	"github.com/endless-net/stun/internal/health"
+	"github.com/endless-net/stun/internal/metrics"
+	"github.com/endless-net/stun/internal/ratelimit"
+	"github.com/endless-net/stun/internal/stun"
 )
 
 var (

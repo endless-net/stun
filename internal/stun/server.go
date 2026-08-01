@@ -8,8 +8,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/unng-lab/endlessnet-stun/internal/metrics"
-	"github.com/unng-lab/endlessnet-stun/internal/ratelimit"
+	"github.com/endless-net/stun/internal/metrics"
+	"github.com/endless-net/stun/internal/ratelimit"
 )
 
 type Server struct {

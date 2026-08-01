@@ -1,6 +1,6 @@
 services:
   stun:
-    image: ghcr.io/unng-lab/endlessnet-stun:v1.0.7
+    image: ghcr.io/endless-net/stun-public:v1.0.7
     restart: unless-stopped
     read_only: true
     user: "65532:65532"

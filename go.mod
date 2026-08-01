@@ -1,3 +1,3 @@
-module github.com/unng-lab/endlessnet-stun
+module github.com/endless-net/stun
 
 go 1.26.5
