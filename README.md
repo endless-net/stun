@@ -17,6 +17,7 @@ Protocol support is documented in [docs/supported-protocol.md](docs/supported-pr
 
 - [Service architecture, accepted decisions, known limitations, and possible future (Russian)](docs/architecture-and-roadmap.ru.md)
 - [Supported STUN protocol](docs/supported-protocol.md)
+- [Systemd deployment, runtime dependencies, network requirements, update, and rollback (Russian)](docs/deployment-systemd.ru.md)
 
 ## Configuration
 
