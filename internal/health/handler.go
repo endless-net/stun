@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/unng-lab/endlessnet-stun/internal/metrics"
+	"github.com/endless-net/stun/internal/metrics"
 )
 
 func Handler(registry *metrics.Registry) http.Handler {
