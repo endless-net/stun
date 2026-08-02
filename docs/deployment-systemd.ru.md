@@ -14,6 +14,29 @@
 - `linux_amd64` — обычные x86-64 серверы Intel/AMD;
 - `linux_arm64` — 64-битные ARM-серверы.
 
+## Commit-addressed publication по D-024
+
+Workflow `.github/workflows/publish-production.yml` является producer-границей
+для будущего общего Infrastructure rollout. Он принимает полный SHA commit из
+`main`, требует успешный `ci.yml` для application commit и commit версии самого
+publisher, затем создаёт один Actions artifact
+`endlessnet-stun-<commit_sha>`. Внутри находятся архив с AMD64/ARM64 бинарниками
+сервиса и smoke-клиента, systemd unit и license notices, SHA-256 архива,
+schema-v1 manifest, in-toto/SLSA statement и Sigstore/Rekor bundle.
+
+Manifest и provenance связывают archive digest с exact source commit, CI runs и
+publication run. Publisher проверяет layout, checksum и evidence до upload. Он
+не принимает target, inventory или operation, не читает production secrets и
+не имеет host access. Semver GitHub Release и GHCR image остаются отдельным
+публичным контрактом STUN и не подменяют commit-addressed production artifact.
+
+Точного reusable workflow для STUN target в Infrastructure пока нет, поэтому
+publication не запускает rollout. Существующий SSH workflow ниже временно
+остаётся legacy-путём до появления безопасной замены. После появления mapping
+его credentials и host mutation должны быть удалены из STUN, а whole-job caller
+должен передавать фиксированному Infrastructure entrypoint только
+`commit_sha`.
+
 ## Зависимости и сеть
 
 Сервис автономный и stateless. Ему **не нужны** PostgreSQL, Redis, файловое
