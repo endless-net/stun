@@ -36,6 +36,8 @@ jobs:
         run: go vet ./...
       - name: Build binaries
         run: go build ./cmd/endlessnet-stun ./cmd/endlessnet-stun-smoke
+      - name: Test production artifact contract
+        run: bash scripts/test-production-contracts.sh
       - name: Lint deployment scripts
         run: docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d scripts/*.sh
       - name: Vulnerability scan

@@ -2,10 +2,13 @@
 
 `endlessnet-stun` is the autonomous, stateless STUN infrastructure service used by EndlessNet clients to discover their public UDP mapping. It accepts standard UDP Binding requests and does not depend on the EndlessNet control plane, database, credentials, or internal Go packages.
 
-This repository owns the STUN source, tests, release artifacts, container
-image, service configuration examples, and deployment workflow. The public
-history in this repository is authoritative. Endpoint selection and
-client-side Binding behavior are owned by their respective consumers.
+This repository owns the STUN source, tests, immutable artifacts, publication,
+container image, and service configuration examples. The D-024 boundary assigns
+production inventory, host access, and mutation to Infrastructure; the
+temporary legacy SSH exception is documented below until a fixed STUN mapping
+exists. The public history in this repository is authoritative. Endpoint
+selection and client-side Binding behavior are owned by their respective
+consumers.
 
 ## Boundaries
 
@@ -88,6 +91,31 @@ Metrics include `stun_requests_total`, `stun_responses_total`, `stun_invalid_req
 Tags matching `vMAJOR.MINOR.PATCH` run the release workflow. A tag is accepted only when its commit is reachable from `origin/main` and GitHub associates that commit with a merged pull request whose base is `main`. The workflow repeats the quality gate, builds Linux AMD64 and ARM64 server and smoke-test binaries, creates SHA256 checksums, publishes a GitHub Release, and pushes immutable GHCR tags for the exact version, major/minor line, and major line. Deployment always consumes the exact `vMAJOR.MINOR.PATCH` artifact and verifies its checksum.
 
 Update `CHANGELOG.md` on a feature branch, merge it through a pull request and CI into `main`, and only then create a signed or protected version tag. Direct-push and unmerged commits are rejected by both release and production deployment provenance checks. The release job never bypasses the `production` environment.
+
+## Commit-addressed production publication
+
+`.github/workflows/publish-production.yml` accepts one full commit SHA from
+`main`. It requires a successful `ci.yml` run for that application commit and
+for the exact `main` commit containing the publisher workflow. A successful run
+uploads one Actions artifact named `endlessnet-stun-<commit_sha>` containing:
+
+- one archive with AMD64 and ARM64 server and smoke-test binaries, the systemd
+  unit, and license notices;
+- the archive SHA-256 checksum;
+- a schema-v1 publication manifest binding the archive to the producer commit,
+  CI runs, and publication run;
+- an in-toto/SLSA provenance statement and its Sigstore/Rekor bundle.
+
+The workflow verifies the archive layout, checksum, manifest, provenance, and
+Rekor entry before upload. It has no target, inventory, production credentials,
+or host access. This commit-addressed artifact is the producer side of D-024;
+the public semver Release and GHCR image remain a separate supported contract.
+
+There is not yet an exact-pinned Infrastructure reusable workflow for an STUN
+target. Therefore publication currently stops after upload and does not claim a
+production rollout. The legacy SSH deployment below remains available only
+until that fixed Infrastructure mapping is provisioned; it must be removed when
+the commit-only handoff is added.
 
 ## systemd deployment
 
