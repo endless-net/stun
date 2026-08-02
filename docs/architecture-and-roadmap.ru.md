@@ -218,7 +218,23 @@ Tag вида `vMAJOR.MINOR.PATCH` запускает проверку provenance
 
 Production deployment всегда использует точную версию, даже если registry дополнительно содержит major/minor tags.
 
-### 11.2. systemd deployment
+### 11.2. Commit-addressed production publication
+
+Отдельный producer workflow принимает полный commit SHA из `main`, требует
+green CI точной application revision и версии publisher workflow и публикует
+один immutable Actions artifact `endlessnet-stun-<commit_sha>`. В его архиве
+находятся AMD64/ARM64 бинарники сервиса и smoke-клиента, systemd unit и license
+notices. SHA-256, schema-v1 manifest и подписанный in-toto/SLSA provenance
+однозначно связывают содержимое с source commit, CI и publication run.
+
+Publication не выбирает production target, не получает inventory или host
+credentials и не выполняет mutation. Exact Infrastructure STUN entrypoint ещё
+не provisioned, поэтому публикация пока завершается без rollout. Legacy SSH
+workflow остаётся временной эксплуатационной границей до безопасной замены и
+должен быть удалён одновременно с добавлением exact-pinned whole-job caller,
+передающего только `commit_sha`.
+
+### 11.3. Legacy systemd deployment
 
 Основной production-путь — последовательный rolling deploy по SSH:
 
@@ -234,7 +250,7 @@ Production deployment всегда использует точную верси�
 
 При ошибке после переключения symlink восстанавливается предыдущий immutable release. Если внешний smoke test не прошёл, orchestrator также запускает rollback и повторно проверяет локальную readiness и публичный STUN. Rollout останавливается на первом проблемном узле.
 
-### 11.3. Container
+### 11.4. Container
 
 Контейнер является поддерживаемым способом упаковки и локального запуска. Production workflow в репозитории автоматизирует systemd deployment, но не Kubernetes или container orchestrator.
 
@@ -245,6 +261,7 @@ Production deployment всегда использует точную верси�
 | Unit | Wire format IPv4/IPv6, invalid input, limiter, config, health и metrics |
 | Fuzz | Parser не паникует на произвольном datagram |
 | Process integration | Сборка и запуск реального бинарника, Binding, rate limit, HTTP endpoints, graceful shutdown |
+| Publication contract | Exact archive layout, SHA-256, schema-v1 manifest, CI/run binding и in-toto/Sigstore provenance |
 | Deployment integration | Checksum, atomic switch, first install, rollback, readiness retry, изоляция systemd unit, sequential rollout |
 | Provenance integration | Tag из `main`, наличие merged PR, запрет ручного deploy из другой ветки |
 | CI security | `govulncheck` и scan готового container image |
