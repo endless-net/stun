@@ -63,7 +63,7 @@ jobs:
           done
           exit 1
       - name: Scan container
-        uses: aquasecurity/trivy-action@v0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: endlessnet-stun:ci
           format: table
