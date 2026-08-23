@@ -153,3 +153,22 @@ if grep -Eq 'uses:[[:space:]]+endless-net/infrastructure/' "$publisher"; then
   echo "Infrastructure caller must wait for an exact STUN entrypoint" >&2
   exit 1
 fi
+
+for forbidden in \
+  .github/workflows/deploy-production.yml \
+  scripts/deploy-prod.sh \
+  scripts/install-release.sh \
+  scripts/configure-metrics-bind.sh \
+  scripts/rollback.sh \
+  scripts/install.sh; do
+  if [ -e "$repository_root/$forbidden" ]; then
+    echo "STUN repository contains forbidden production lifecycle entrypoint: $forbidden" >&2
+    exit 1
+  fi
+done
+
+if grep -Eq 'deploy-production|secrets:[[:space:]]*inherit|STUN_AUTO_DEPLOY_AFTER_RELEASE|DEPLOY_SSH_PRIVATE_KEY' \
+  "$repository_root/.github/workflows/release.yml" "$repository_root/README.md"; then
+  echo "release path contains production rollout authority" >&2
+  exit 1
+fi

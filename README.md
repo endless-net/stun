@@ -3,12 +3,11 @@
 `endlessnet-stun` is the autonomous, stateless STUN infrastructure service used by EndlessNet clients to discover their public UDP mapping. It accepts standard UDP Binding requests and does not depend on the EndlessNet control plane, database, credentials, or internal Go packages.
 
 This repository owns the STUN source, tests, immutable artifacts, publication,
-container image, and service configuration examples. The D-024 boundary assigns
-production inventory, host access, and mutation to Infrastructure; the
-temporary legacy SSH exception is documented below until a fixed STUN mapping
-exists. The public history in this repository is authoritative. Endpoint
-selection and client-side Binding behavior are owned by their respective
-consumers.
+container image, and service configuration examples. Production inventory, host
+access, activation, rollout, and rollback belong exclusively to Infrastructure
+under D-014/D-025. The public history in this repository is authoritative.
+Endpoint selection and client-side Binding behavior are owned by their
+respective consumers.
 
 ## Boundaries
 
@@ -20,7 +19,7 @@ Protocol support is documented in [docs/supported-protocol.md](docs/supported-pr
 
 - [Service architecture, accepted decisions, known limitations, and possible future (Russian)](docs/architecture-and-roadmap.ru.md)
 - [Supported STUN protocol](docs/supported-protocol.md)
-- [Systemd deployment, runtime dependencies, network requirements, update, and rollback (Russian)](docs/deployment-systemd.ru.md)
+- [Systemd artifact contract and Infrastructure handoff (Russian)](docs/deployment-systemd.ru.md)
 
 ## Configuration
 
@@ -88,9 +87,9 @@ Metrics include `stun_requests_total`, `stun_responses_total`, `stun_invalid_req
 
 ## Release process
 
-Tags matching `vMAJOR.MINOR.PATCH` run the release workflow. A tag is accepted only when its commit is reachable from `origin/main` and GitHub associates that commit with a merged pull request whose base is `main`. The workflow repeats the quality gate, builds Linux AMD64 and ARM64 server and smoke-test binaries, creates SHA256 checksums, publishes a GitHub Release, and pushes immutable GHCR tags for the exact version, major/minor line, and major line. Deployment always consumes the exact `vMAJOR.MINOR.PATCH` artifact and verifies its checksum.
+Tags matching `vMAJOR.MINOR.PATCH` run the release workflow. A tag is accepted only when its commit is reachable from `origin/main` and GitHub associates that commit with a merged pull request whose base is `main`. The workflow repeats the quality gate, builds Linux AMD64 and ARM64 server and smoke-test binaries, creates SHA256 checksums, publishes a GitHub Release, and pushes immutable GHCR tags for the exact version, major/minor line, and major line. Infrastructure consumes the exact `vMAJOR.MINOR.PATCH` artifact and verifies its checksum.
 
-Update `CHANGELOG.md` on a feature branch, merge it through a pull request and CI into `main`, and only then create a signed or protected version tag. Direct-push and unmerged commits are rejected by both release and production deployment provenance checks. The release job never bypasses the `production` environment.
+Update `CHANGELOG.md` on a feature branch, merge it through a pull request and CI into `main`, and only then create a signed or protected version tag. Direct-push and unmerged commits are rejected by the release provenance check.
 
 ## Commit-addressed production publication
 
@@ -108,33 +107,13 @@ uploads one Actions artifact named `endlessnet-stun-<commit_sha>` containing:
 
 The workflow verifies the archive layout, checksum, manifest, provenance, and
 Rekor entry before upload. It has no target, inventory, production credentials,
-or host access. This commit-addressed artifact is the producer side of D-024;
+or host access. This commit-addressed artifact is the STUN producer side of D-014/D-025;
 the public semver Release and GHCR image remain a separate supported contract.
 
-There is not yet an exact-pinned Infrastructure reusable workflow for an STUN
-target. Therefore publication currently stops after upload and does not claim a
-production rollout. The legacy SSH deployment below remains available only
-until that fixed Infrastructure mapping is provisioned; it must be removed when
-the commit-only handoff is added.
-
-## systemd deployment
-
-Bootstrap a Linux host once with `sudo ./scripts/install.sh`, review `/etc/endlessnet-stun/stun.env`, and deploy an exact release through `.github/workflows/deploy-production.yml`. Runtime layout:
-
-```text
-/opt/endlessnet-stun/
-├── releases/v1.0.6/endlessnet-stun
-├── releases/v1.0.7/endlessnet-stun
-└── current -> /opt/endlessnet-stun/releases/v1.0.7
-```
-
-The workflow accepts an exact version, a comma-separated target host/group, matching public STUN endpoints, and the `rolling` strategy. Manual dispatch is accepted only from `main`, and the exact release commit must have merged-PR provenance. Targets update sequentially. Each host atomically sets `ENDLESSNET_STUN_METRICS_ADDR=127.0.0.1:9090`, performs checksum verification, configuration preflight, an atomic `current` symlink switch, restart of only `endlessnet-stun.service`, and local readiness. The runner then performs a real public UDP Binding smoke test; it never accesses the host-local HTTP endpoints. The remote operations are implemented by `scripts/configure-metrics-bind.sh` and `scripts/install-release.sh`; provenance, exact-version, checksum, configuration isolation, service isolation, readiness, and rollback behavior are covered by Linux deployment integration tests.
-
-Configure the GitHub `production` environment with `DEPLOY_SSH_PRIVATE_KEY` and `DEPLOY_KNOWN_HOSTS` secrets plus `DEPLOY_USER`. Enable required reviewers when the repository's GitHub plan supports environment protection; merged-PR provenance remains mandatory in the workflow itself. Set `STUN_AUTO_DEPLOY_AFTER_RELEASE=true` plus `STUN_TARGETS` and `STUN_ENDPOINTS` variables only when every successful release should deploy to production. The same workflow remains manually dispatchable from `main`.
-
-## Rollback
-
-Before switching, deployment records the prior immutable release. Failure to start, failed readiness, process exit, or failed public Binding smoke test restores the prior symlink and restarts only the STUN unit. `scripts/rollback.sh` provides the same operation explicitly and repeats readiness plus the real external smoke test. Previous artifacts are never rebuilt.
+Publication ends after upload and verification. It does not accept targets or
+inventory, read deployment secrets, connect to hosts, activate a release,
+perform rollout, or rollback. Infrastructure consumes the immutable artifact
+through the released manifest and owns the complete production lifecycle.
 
 ## Troubleshooting
 
@@ -142,6 +121,6 @@ Before switching, deployment records the prior immutable release. Failure to sta
 - UDP timeout: verify DNS, host firewall, security group, and `3478/udp`; TCP reachability does not prove STUN reachability.
 - Readiness failure: inspect `systemctl status endlessnet-stun` and confirm at least one configured UDP address can bind.
 - Rate limiting: inspect `stun_rate_limited_total` and adjust both rate and burst deliberately.
-- Deployment failure: inspect the workflow step for the reported target and rollback version; rollout stops before later targets.
+- Production lifecycle issues: inspect the Infrastructure rollout and released manifest; this repository only publishes and verifies artifacts.
 
 EndlessNet clients continue to obtain endpoints such as `stun1.endlessnet.ru:3478` from signed network maps or control-plane configuration. The client has no dependency on this repository's Go packages or release version.
