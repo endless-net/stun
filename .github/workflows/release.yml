@@ -95,15 +95,3 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
-
-  deploy-production:
-    if: ${{ vars.STUN_AUTO_DEPLOY_AFTER_RELEASE == 'true' }}
-    needs: release
-    uses: ./.github/workflows/deploy-production.yml
-    with:
-      version: ${{ github.ref_name }}
-      target_host_or_group: ${{ vars.STUN_TARGETS }}
-      stun_endpoints: ${{ vars.STUN_ENDPOINTS }}
-      metrics_bind_address: 127.0.0.1:9090
-      deployment_strategy: rolling
-    secrets: inherit

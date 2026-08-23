@@ -20,7 +20,7 @@ done
   exit 2
 }
 if [[ -n "$workflow_ref" && "$workflow_ref" != refs/heads/main ]]; then
-  echo "manual production deployment must run from refs/heads/main" >&2
+  echo "release provenance verification must run from refs/heads/main" >&2
   exit 1
 fi
 

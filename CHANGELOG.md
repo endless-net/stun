@@ -2,6 +2,10 @@
 
 All notable changes are recorded here. Releases use semantic versioning.
 
+- Remove STUN-owned production activation, rollout, rollback, SSH credentials,
+  and host mutation; publish immutable artifacts for Infrastructure handoff
+  through the released manifest.
+
 ## v1.0.9 - 2026-07-14
 
 - Retry host-local readiness during service startup so rolling deploys tolerate the brief transition before UDP listeners become ready.
