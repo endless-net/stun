@@ -1,3 +1,3 @@
 module github.com/endless-net/stun
 
-go 1.26.5
+go 1.27.0
