@@ -30,7 +30,7 @@ jobs:
           docker run --rm --platform linux/amd64
           -v "$PWD:/src" -w /src
           -e GOTOOLCHAIN=local -e CGO_ENABLED=1
-          golang:1.26.5-bookworm@sha256:1ecb7edf62a0408027bd5729dfd6b1b8766e578e8df93995b225dfd0944eb651
+          golang:1.27.0-bookworm@sha256:ba5ef6614ca131b80a635fc6a7b715d9ee8a7f333debdbb81afb68259c7d48d4
           sh -ec 'git config --global --add safe.directory /src && go test -race ./...'
       - name: Vet
         run: go vet ./...
@@ -41,7 +41,7 @@ jobs:
       - name: Vulnerability scan
         uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
         with:
-          go-version-input: 1.26.5
+          go-version-input: 1.27.0
           go-package: ./...
           cache: false
       - name: Set up Docker Buildx
