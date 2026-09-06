@@ -41,7 +41,8 @@ flowchart LR
     C -->|"Binding Request<br/>UDP 3478"| S["endlessnet-stun"]
     S -->|"Binding Success<br/>XOR-MAPPED-ADDRESS"| C
     O["Локальный сборщик метрик<br/>(вне репозитория)"] -->|"HTTP loopback<br/>/metrics"| S
-    D["GitHub Actions<br/>production environment"] -->|"точная версия, SHA-256, SSH"| H["Linux host / systemd"]
+    D["STUN publication"] -->|"immutable artifact, digest, manifest"| I["Infrastructure"]
+    I -->|"activation / rollout / rollback"| H["Linux host / systemd"]
     H --> S
 ```
 
@@ -216,27 +217,31 @@ Tag вида `vMAJOR.MINOR.PATCH` запускает проверку provenance
 - GitHub Release;
 - multi-architecture GHCR image с version-line tags.
 
-Production deployment всегда использует точную версию, даже если registry дополнительно содержит major/minor tags.
+Infrastructure использует точную версию из released manifest; STUN не выбирает
+production target и не выполняет deployment.
 
-### 11.2. systemd deployment
+### 11.2. Commit-addressed production publication
 
-Основной production-путь — последовательный rolling deploy по SSH:
+Отдельный producer workflow принимает полный commit SHA из `main`, требует
+green CI точной application revision и версии publisher workflow и публикует
+один immutable Actions artifact `endlessnet-stun-<commit_sha>`. В его архиве
+находятся AMD64/ARM64 бинарники сервиса и smoke-клиента, systemd unit и license
+notices. SHA-256, schema-v1 manifest и подписанный in-toto/SLSA provenance
+однозначно связывают содержимое с source commit, CI и publication run.
 
-1. Проверить, что release commit находится в `origin/main` и пришёл через merged PR.
-2. Скачать бинарник для архитектуры узла и сверить checksum локально и на узле.
-3. Проверить конфигурацию новым бинарником через `--check-config`.
-4. Поместить release в `/opt/endlessnet-stun/releases/<version>`.
-5. Атомарно переключить symlink `/opt/endlessnet-stun/current`.
-6. Перезапустить только `endlessnet-stun.service`.
-7. Дождаться локального `/readyz`.
-8. Выполнить реальный Binding probe через публичный endpoint.
-9. Только после успеха перейти к следующему узлу.
+Publication не выбирает production target, не получает inventory или host
+credentials и не выполняет mutation. Согласно D-025, Infrastructure получает
+этот immutable artifact только через released manifest и самостоятельно
+владеет activation, rollout и rollback.
 
-При ошибке после переключения symlink восстанавливается предыдущий immutable release. Если внешний smoke test не прошёл, orchestrator также запускает rollback и повторно проверяет локальную readiness и публичный STUN. Rollout останавливается на первом проблемном узле.
+Publication завершается после загрузки и проверки артефакта. Production
+lifecycle в репозитории не автоматизируется: Infrastructure сама выбирает
+runtime и выполняет rollout, activation и rollback.
 
-### 11.3. Container
+### 11.4. Container
 
-Контейнер является поддерживаемым способом упаковки и локального запуска. Production workflow в репозитории автоматизирует systemd deployment, но не Kubernetes или container orchestrator.
+Контейнер является поддерживаемым способом упаковки и локального запуска.
+Production lifecycle принадлежит Infrastructure.
 
 ## 12. Проверки
 
@@ -245,11 +250,13 @@ Production deployment всегда использует точную верси�
 | Unit | Wire format IPv4/IPv6, invalid input, limiter, config, health и metrics |
 | Fuzz | Parser не паникует на произвольном datagram |
 | Process integration | Сборка и запуск реального бинарника, Binding, rate limit, HTTP endpoints, graceful shutdown |
-| Deployment integration | Checksum, atomic switch, first install, rollback, readiness retry, изоляция systemd unit, sequential rollout |
-| Provenance integration | Tag из `main`, наличие merged PR, запрет ручного deploy из другой ветки |
+| Publication contract | Exact archive layout, SHA-256, schema-v1 manifest, CI/run binding и in-toto/Sigstore provenance |
+| Artifact integration | Checksum, archive layout, manifest, provenance и запрет producer deployment authority |
+| Provenance integration | Tag из `main`, наличие merged PR |
 | CI security | `govulncheck` и scan готового container image |
 
-Локальный полный gate запускается командой `./scripts/verify.sh`. На Windows shell/deployment-часть следует проверять в Linux или CI.
+Локальный полный gate запускается командой `./scripts/verify.sh`. Shell-часть
+publication следует проверять в Linux или CI.
 
 ## 13. Принятые архитектурные решения
 
@@ -331,7 +338,7 @@ Production deployment всегда использует точную верси�
 
 ## 17. Связанные материалы
 
-- [README](../README.md) — запуск, конфигурация, release, deploy, rollback и troubleshooting.
+- [README](../README.md) — запуск, конфигурация, release, artifact handoff и troubleshooting.
 - [Поддерживаемый протокол](supported-protocol.md) — точная матрица STUN-функций.
 - [Security policy](../SECURITY.md) — приватное сообщение об уязвимостях.
 - [CHANGELOG](../CHANGELOG.md) — история выпущенных изменений.
