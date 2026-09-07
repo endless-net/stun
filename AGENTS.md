@@ -7,6 +7,12 @@
 - Format every commit message according to Conventional Commits, for example
   `feat: ...`, `fix: ...`, `docs: ...`, or `chore: ...`.
 
+## Repository boundary
+
+- Work only within this repository.
+- Before reading from or writing to any path outside this repository, request
+  and receive the user's explicit permission.
+
 ## Version increases
 
 - Never increase any version or generation number, including schema, configuration,
