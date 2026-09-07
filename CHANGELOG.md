@@ -4,6 +4,8 @@ All notable changes are recorded here. Releases use semantic versioning.
 
 ## Unreleased
 
+- Bind explicit IPv4 and IPv6 STUN addresses in separate socket families so
+  wildcard listeners can share a port; require this configuration in product E2E.
 - Share STUN framing and attribute validation, centralize packet outcomes, and
   separate executable diagnostics, service lifecycle, metrics rendering, and E2E support.
 - Interrupt pending client requests on cancellation and require every configured
