@@ -8,7 +8,7 @@ rollout или rollback. Эти операции принадлежат Infrastr
 
 ## Commit-addressed publication
 
-Workflow `.github/workflows/publish-production.yml` принимает полный SHA
+Ручная операция `publish` workflow `.github/workflows/ci.yml` принимает полный SHA
 коммита из `main` и требует green CI для application commit и publisher
 workflow. Он публикует Actions artifact `endlessnet-stun-<commit_sha>` с:
 
@@ -42,3 +42,9 @@ Infrastructure endpoint:
 Любые production failure и rollback расследуются в Infrastructure по STUN
 desired state и rollout telemetry; в STUN изменяется только следующий immutable
 artifact.
+
+При ручном запуске укажите `operation=publish` и `commit_sha=<полный SHA>`.
+Операция `check` запускает только проверки. Удостоверение Sigstore для новых
+артефактов: `https://github.com/endless-net/stun/.github/workflows/ci.yml@refs/heads/main`.
+Потребитель Infrastructure должен проверять этот точный путь; схема manifest
+остаётся прежней.

@@ -34,7 +34,11 @@ func TestStandaloneBinaryEndToEnd(t *testing.T) {
 
 	stunAddr := reserveAddr(t, "udp")
 	metricsAddr := reserveAddr(t, "tcp")
-	var logs bytes.Buffer
+	logs, err := os.CreateTemp(t.TempDir(), "service-*.log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { logs.Close() })
 	cmd := exec.Command(exe,
 		"--addr="+stunAddr,
 		"--metrics-addr="+metricsAddr,
@@ -42,15 +46,22 @@ func TestStandaloneBinaryEndToEnd(t *testing.T) {
 		"--rate-limit-burst=3",
 		"--log-level=debug",
 	)
-	cmd.Stdout = &logs
-	cmd.Stderr = &logs
+	cmd.Stdout = logs
+	cmd.Stderr = logs
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	stopped := false
 	t.Cleanup(func() {
-		if cmd.ProcessState == nil || !cmd.ProcessState.Exited() {
+		if !stopped {
 			_ = cmd.Process.Kill()
-			_, _ = cmd.Process.Wait()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Error("process cleanup timed out")
+			}
 		}
 	})
 
@@ -109,12 +120,11 @@ func TestStandaloneBinaryEndToEnd(t *testing.T) {
 		if err := cmd.Process.Signal(os.Interrupt); err != nil {
 			t.Fatal(err)
 		}
-		waitCh := make(chan error, 1)
-		go func() { waitCh <- cmd.Wait() }()
 		select {
-		case err := <-waitCh:
+		case err := <-done:
+			stopped = true
 			if err != nil {
-				t.Fatalf("graceful shutdown: %v; logs: %s", err, concise(logs.Bytes()))
+				t.Fatalf("graceful shutdown: %v; logs: %s", err, readLogs(logs.Name()))
 			}
 		case <-time.After(5 * time.Second):
 			t.Fatal("process did not stop after interrupt")
@@ -155,7 +165,7 @@ func waitHTTP(t *testing.T, url string) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		res, err := http.Get(url)
+		res, err := (&http.Client{Timeout: time.Second}).Get(url)
 		if err == nil {
 			_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 1<<20))
 			_ = res.Body.Close()
@@ -183,7 +193,7 @@ func query(t *testing.T, addr string) *net.UDPAddr {
 
 func get(t *testing.T, url string) string {
 	t.Helper()
-	res, err := http.Get(url)
+	res, err := (&http.Client{Timeout: time.Second}).Get(url)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,4 +214,12 @@ func concise(out []byte) string {
 		out = out[len(out)-2000:]
 	}
 	return string(out)
+}
+
+func readLogs(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err.Error()
+	}
+	return concise(data)
 }

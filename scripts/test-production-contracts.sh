@@ -42,7 +42,7 @@ printf '%s  %s\n' "$archive_sha256" "$archive_name" >"$work/$archive_name.sha256
 
 jq -n \
   --arg repository endless-net/stun \
-  --arg workflow .github/workflows/publish-production.yml \
+  --arg workflow .github/workflows/ci.yml \
   --arg run_id "$producer_run_id" \
   --arg commit_ci_run_id "$commit_ci_run_id" \
   --arg publisher_commit "$publisher_commit" \
@@ -70,7 +70,7 @@ jq -n \
       provenance: {
         statement: $statement,
         sigstore_bundle: $bundle,
-        certificate_identity: "https://github.com/endless-net/stun/.github/workflows/publish-production.yml@refs/heads/main",
+        certificate_identity: "https://github.com/endless-net/stun/.github/workflows/ci.yml@refs/heads/main",
         certificate_issuer: "https://token.actions.githubusercontent.com",
         rekor_log_index: ($rekor_index | tonumber)
       }
@@ -95,7 +95,7 @@ jq -n \
           externalParameters: {commit_sha: $commit_sha},
           internalParameters: {
             producer_repository: "endless-net/stun",
-            producer_workflow: ".github/workflows/publish-production.yml",
+            producer_workflow: ".github/workflows/ci.yml",
             producer_run_id: ($run_id | tonumber),
             commit_ci_run_id: ($commit_ci_run_id | tonumber),
             publisher_workflow_commit: $publisher_commit,
@@ -107,7 +107,7 @@ jq -n \
           }]
         },
         runDetails: {
-          builder: {id: "https://github.com/endless-net/stun/.github/workflows/publish-production.yml@refs/heads/main"},
+          builder: {id: "https://github.com/endless-net/stun/.github/workflows/ci.yml@refs/heads/main"},
           metadata: {invocationId: ("https://github.com/endless-net/stun/actions/runs/" + $run_id)}
         }
       }
@@ -141,10 +141,13 @@ if verify_artifact 2>/dev/null; then
 fi
 mv "$publication.valid" "$publication"
 
-publisher="$repository_root/.github/workflows/publish-production.yml"
-# The literal GitHub expression is the contract under test.
-# shellcheck disable=SC2016
-grep -Fqx 'run-name: ${{ inputs.commit_sha }}' "$publisher"
+publisher="$work/publisher.txt"
+# Scope publication-authority checks to the publication job and its scripts;
+# release jobs in the shared workflow legitimately use the registry token.
+sed -n '/^  publish:/,$p' "$repository_root/.github/workflows/ci.yml" >"$publisher"
+cat "$repository_root/scripts/build-production-bundle.sh" \
+  "$repository_root/scripts/sign-production-provenance.sh" \
+  "$repository_root/scripts/publish-production-metadata.sh" >>"$publisher"
 if grep -Eq 'DEPLOY_|SSH|known.host|target|inventory|secrets:|secrets\.' "$publisher"; then
   echo "production publisher contains deployment authority" >&2
   exit 1
@@ -168,7 +171,7 @@ for forbidden in \
 done
 
 if grep -Eq 'deploy-production|secrets:[[:space:]]*inherit|STUN_AUTO_DEPLOY_AFTER_RELEASE|DEPLOY_SSH_PRIVATE_KEY' \
-  "$repository_root/.github/workflows/release.yml" "$repository_root/README.md"; then
+  "$repository_root/.github/workflows/ci.yml" "$repository_root/README.md"; then
   echo "release path contains production rollout authority" >&2
   exit 1
 fi

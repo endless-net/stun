@@ -99,3 +99,51 @@ func FuzzBuildBindingResponseDoesNotPanic(f *testing.F) {
 		_, _ = BuildBindingResponse(packet, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1234})
 	})
 }
+
+func FuzzParseBindingResponse(f *testing.F) {
+	request, tx, err := BuildBindingRequest()
+	if err != nil {
+		f.Fatal(err)
+	}
+	valid, err := BuildBindingResponse(request, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1234})
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(valid)
+	f.Add([]byte("not-stun"))
+	f.Fuzz(func(t *testing.T, packet []byte) {
+		mapped, err := ParseBindingResponse(packet, tx)
+		if err == nil && (mapped == nil || mapped.IP.To16() == nil) {
+			t.Fatal("accepted response without a valid address")
+		}
+	})
+}
+
+func TestBindingAttributesWithPadding(t *testing.T) {
+	request, tx, err := BuildBindingRequest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1234}
+	response, err := BuildBindingResponse(request, remote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, original := range [][]byte{request, response} {
+		for length := 0; length < 8; length++ {
+			attr := make([]byte, 4+((length+3)&^3))
+			binary.BigEndian.PutUint16(attr[:2], 0x8022)
+			binary.BigEndian.PutUint16(attr[2:4], uint16(length))
+			packet := append(append([]byte(nil), original...), attr...)
+			binary.BigEndian.PutUint16(packet[2:4], uint16(len(packet)-HeaderLength))
+			if original[0] == 0 {
+				_, err = BuildBindingResponse(packet, remote)
+			} else {
+				_, err = ParseBindingResponse(packet, tx)
+			}
+			if err != nil {
+				t.Fatalf("valid padded attribute length %d: %v", length, err)
+			}
+		}
+	}
+}

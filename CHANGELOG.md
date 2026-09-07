@@ -4,6 +4,14 @@ All notable changes are recorded here. Releases use semantic versioning.
 
 ## Unreleased
 
+- Share STUN framing and attribute validation, centralize packet outcomes, and
+  separate executable diagnostics, service lifecycle, metrics rendering, and E2E support.
+- Interrupt pending client requests on cancellation and require every configured
+  listener for readiness; release all sockets after partial startup failures.
+- Consolidate checks, release, and manual artifact publication in `ci.yml`;
+  new production attestations identify `ci.yml@refs/heads/main` without changing
+  the manifest schema.
+
 - Keep UDP listeners alive after truncated datagrams, sanitize transport errors,
   and validate complete Binding responses.
 - Add required standalone product E2E for Linux, Windows and Linux containers,

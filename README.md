@@ -78,7 +78,7 @@ The image runs as a non-root user. `deploy/docker/docker-compose.example.yml` pi
 ## Local health and observability
 
 - `GET http://127.0.0.1:9090/healthz` reports process health.
-- `GET http://127.0.0.1:9090/readyz` returns success only while at least one UDP listener is active.
+- `GET http://127.0.0.1:9090/readyz` returns success only while every configured UDP listener is active. All UDP and HTTP sockets are bound before serving starts.
 - `GET http://127.0.0.1:9090/metrics` returns Prometheus text format for the host-local Alloy agent.
 - `GET http://127.0.0.1:9090/revisionz` returns the running executable's SHA-256 digest, commit, version, and build date for Infrastructure diagnostics. These fields are also present in `stun_build_info`; they contain no client or deployment configuration data.
 
@@ -88,14 +88,16 @@ Metrics include `stun_requests_total`, `stun_responses_total`, `stun_invalid_req
 
 ## Release process
 
-Tags matching `vMAJOR.MINOR.PATCH` run the release workflow. A tag is accepted only when its commit is reachable from `origin/main` and GitHub associates that commit with a merged pull request whose base is `main`. The workflow repeats the quality gate, requires all three product E2E jobs from a successful main CI run for the exact commit, builds Linux AMD64 and ARM64 server and smoke-test binaries, creates SHA256 checksums, and publishes a GitHub Release and GHCR image. Major and minor image tags are mutable aliases; consumers pin an image digest or an exact binary with its checksum.
+The single `.github/workflows/ci.yml` workflow runs checks on pull requests and commits to `main`. Tags matching `vMAJOR.MINOR.PATCH` run its release job. A tag is accepted only when its commit is reachable from `origin/main` and GitHub associates that commit with a merged pull request whose base is `main`. The workflow repeats the quality gate, requires all three product E2E jobs from a successful main CI run for the exact commit, builds Linux AMD64 and ARM64 server and smoke-test binaries, creates SHA256 checksums, and publishes a GitHub Release and GHCR image. Major and minor image tags are mutable aliases; consumers pin an image digest or an exact binary with its checksum.
 
 Update `CHANGELOG.md` on a feature branch, merge it through a pull request and CI into `main`, and only then create a signed or protected version tag. Direct-push and unmerged commits are rejected by the release provenance check.
 
 ## Commit-addressed production publication
 
-`.github/workflows/publish-production.yml` accepts one full commit SHA from
-`main`. It requires a successful `ci.yml` run for that application commit and
+The manual `publish` operation in `.github/workflows/ci.yml` accepts one full
+commit SHA from `main` through the `commit_sha` input. The default manual
+operation, `check`, only runs checks. Publication requires a successful
+`ci.yml` run for that application commit and
 for the exact `main` commit containing the publisher workflow. A successful run
 uploads one Actions artifact named `endlessnet-stun-<commit_sha>` containing:
 
@@ -105,6 +107,13 @@ uploads one Actions artifact named `endlessnet-stun-<commit_sha>` containing:
 - a schema-v1 publication manifest binding the archive to the producer commit,
   CI runs, and publication run;
 - an in-toto/SLSA provenance statement and its Sigstore/Rekor bundle.
+
+The producer workflow and Sigstore certificate identity now use
+`.github/workflows/ci.yml@refs/heads/main`. Infrastructure consumers must trust
+this exact path for new artifacts; the manifest schema remains unchanged.
+Publisher scripts are checked out at the workflow revision separately from the
+application source, so publishing an earlier application commit uses the verified
+current publisher.
 
 The workflow verifies the archive layout, checksum, manifest, provenance, and
 Rekor entry before upload. It has no target, inventory, production credentials,

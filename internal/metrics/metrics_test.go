@@ -7,7 +7,7 @@ import (
 )
 
 func TestRegistryRendersRequiredMetricsWithoutSourceIPLabels(t *testing.T) {
-	r := NewWithBuildInfo(BuildInfo{
+	r := New(BuildInfo{
 		Version:          "v1.2.3",
 		Commit:           "abc123",
 		BuildDate:        "2026-08-02T00:00:00Z",
@@ -56,8 +56,29 @@ func TestBuildInfoReturnsSafeRevisionFields(t *testing.T) {
 		BuildDate:        "2026-08-02T00:00:00Z",
 		ExecutableDigest: "sha256:1234",
 	}
-	r := NewWithBuildInfo(want)
+	r := New(want)
 	if got := r.BuildInfo(); got != want {
 		t.Fatalf("BuildInfo() = %#v, want %#v", got, want)
+	}
+}
+
+func TestReadinessRequiresEveryRegisteredListener(t *testing.T) {
+	r := New(BuildInfo{})
+	if r.Ready() {
+		t.Fatal("empty registry is ready")
+	}
+	r.SetListener("first", false)
+	r.SetListener("second", false)
+	r.SetListener("first", true)
+	if r.Ready() {
+		t.Fatal("partially started service is ready")
+	}
+	r.SetListener("second", true)
+	if !r.Ready() {
+		t.Fatal("fully started service is not ready")
+	}
+	r.SetListener("first", false)
+	if r.Ready() {
+		t.Fatal("partially stopped service is ready")
 	}
 }
