@@ -35,7 +35,7 @@ func Run(parent context.Context, cfg config.Config, logger *slog.Logger, info me
 		}
 	}()
 	for _, addr := range cfg.ListenAddrs {
-		socket, err := net.ListenPacket("udp", addr)
+		socket, err := stun.ListenPacket(addr)
 		if err != nil {
 			return fmt.Errorf("listen for STUN on %s: %w", addr, err)
 		}

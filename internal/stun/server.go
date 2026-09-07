@@ -29,7 +29,7 @@ func (s Server) ListenAndServe(ctx context.Context) error {
 	if s.Metrics == nil {
 		return errors.New("STUN metrics registry is required")
 	}
-	conn, err := net.ListenPacket("udp", s.Addr)
+	conn, err := ListenPacket(s.Addr)
 	if err != nil {
 		return fmt.Errorf("listen for STUN on %s: %w", s.Addr, err)
 	}

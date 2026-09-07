@@ -33,6 +33,10 @@ Flags override environment variables. All configuration is validated before list
 | `ENDLESSNET_STUN_RATE_LIMIT_BURST` | `--rate-limit-burst` | `40` |
 | `ENDLESSNET_STUN_LOG_LEVEL` | `--log-level` | `info` |
 
+Explicit IPv4 and IPv6 listen addresses use separate socket families. Use
+`0.0.0.0:3478,[::]:3478` to serve both families on the same port; IPv6 must be
+available on the host. An empty host (`:3478`) lets Go select the socket family.
+
 Use the safe example in `configs/stun.example.env`; no secrets are required. Validate a host configuration without opening sockets:
 
 ```sh
