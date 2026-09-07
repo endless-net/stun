@@ -6,7 +6,7 @@
 
 ## 1. Назначение
 
-`endlessnet-stun` — автономный stateless-сервис, который помогает клиенту EndlessNet определить видимые из интернета IP-адрес и UDP-порт. Клиент отправляет стандартный STUN Binding Request, а сервис возвращает Binding Success Response с атрибутом `XOR-MAPPED-ADDRESS`.
+`endlessnet-stun` — самостоятельный stateless-продукт. EndlessNet и другие совместимые клиенты интегрируются через стандартный STUN Binding Request, получая Binding Success Response с `XOR-MAPPED-ADDRESS`. Учётная запись и backend EndlessNet для использования продукта не нужны.
 
 Сервис нужен для NAT traversal, но сам не устанавливает соединение между узлами и не передаёт пользовательский трафик.
 
@@ -26,8 +26,10 @@
 
 | Область | Владелец |
 | --- | --- |
-| STUN-код, тесты, бинарники, образ, systemd unit, release и deploy workflow | Этот репозиторий |
-| Список публичных STUN endpoints и клиентское поведение | Репозиторий `endless-net/endlessnet` |
+| STUN-код, тесты, бинарники, образ, systemd unit и release workflow | Этот репозиторий |
+| Список endpoints и их доставка в подписанной network map | `endless-net/coordinator` |
+| Клиентский Binding через общий WireGuard/STUN socket | `endless-net/client` |
+| STUN desired state, activation и rollback окружений EndlessNet | `endless-net/infrastructure`, D-026 |
 | Сбор метрик, их хранение, алерты и дашборды | Внешняя observability-инфраструктура |
 | DNS, firewall/security groups и доступность хоста | Инфраструктура окружения |
 
@@ -217,7 +219,7 @@ Tag вида `vMAJOR.MINOR.PATCH` запускает проверку provenance
 - GitHub Release;
 - multi-architecture GHCR image с version-line tags.
 
-Infrastructure использует точную версию из released manifest; STUN не выбирает
+Infrastructure использует exact artifact pin из отдельного STUN desired state; STUN не выбирает
 production target и не выполняет deployment.
 
 ### 11.2. Commit-addressed production publication
@@ -230,8 +232,8 @@ notices. SHA-256, schema-v1 manifest и подписанный in-toto/SLSA prov
 однозначно связывают содержимое с source commit, CI и publication run.
 
 Publication не выбирает production target, не получает inventory или host
-credentials и не выполняет mutation. Согласно D-025, Infrastructure получает
-этот immutable artifact только через released manifest и самостоятельно
+credentials и не выполняет mutation. Согласно D-026, Infrastructure получает
+этот immutable artifact через отдельный STUN desired state и самостоятельно
 владеет activation, rollout и rollback.
 
 Publication завершается после загрузки и проверки артефакта. Production

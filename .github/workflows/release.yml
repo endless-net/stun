@@ -5,6 +5,7 @@ on:
     tags: ["v*"]
 
 permissions:
+  actions: read
   attestations: write
   contents: write
   id-token: write
@@ -34,6 +35,10 @@ jobs:
         run: ./scripts/verify-production-provenance.sh --version "$GITHUB_REF_NAME"
       - name: Verify release source
         run: ./scripts/verify.sh
+      - name: Require exact-commit product E2E
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/verify-e2e-evidence.sh "$(git rev-parse HEAD)"
       - name: Build release artifacts
         shell: bash
         run: |

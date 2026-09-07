@@ -2,6 +2,14 @@
 
 All notable changes are recorded here. Releases use semantic versioning.
 
+## Unreleased
+
+- Keep UDP listeners alive after truncated datagrams, sanitize transport errors,
+  and validate complete Binding responses.
+- Add required standalone product E2E for Linux, Windows and Linux containers,
+  with independent wire checks and exact-commit release evidence gates.
+- Document the standalone product and separate D-026 Infrastructure lifecycle.
+
 - Remove STUN-owned production activation, rollout, rollback, SSH credentials,
   and host mutation; publish immutable artifacts for Infrastructure handoff
   through the released manifest.

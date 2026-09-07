@@ -96,6 +96,11 @@ jobs:
 
       - name: Verify release source
         run: ./scripts/verify.sh
+      - name: Require exact-commit product E2E
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: bash scripts/verify-e2e-evidence.sh "$COMMIT_SHA"
 
       - name: Build immutable deployment bundle
         id: bundle
