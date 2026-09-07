@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -45,23 +48,32 @@ func run(args []string) error {
 		fmt.Println("configuration ok")
 		return nil
 	}
+	executableDigest, err := currentExecutableDigest()
+	if err != nil {
+		return fmt.Errorf("calculate executable revision: %w", err)
+	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: cfg.LogLevel})).With("component", "stun")
 	slog.SetDefault(logger)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	logger.Info("STUN service starting", "version", version, "commit", commit, "metrics_address", cfg.MetricsAddr)
-	if err := serve(ctx, cfg, logger); err != nil {
+	if err := serve(ctx, cfg, logger, executableDigest); err != nil {
 		return err
 	}
 	logger.Info("STUN service stopped")
 	return nil
 }
 
-func serve(parent context.Context, cfg config.Config, logger *slog.Logger) error {
+func serve(parent context.Context, cfg config.Config, logger *slog.Logger, executableDigest string) error {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
-	registry := metrics.New(version, commit)
+	registry := metrics.NewWithBuildInfo(metrics.BuildInfo{
+		Version:          version,
+		Commit:           commit,
+		BuildDate:        buildDate,
+		ExecutableDigest: executableDigest,
+	})
 	httpServer := &http.Server{
 		Addr:              cfg.MetricsAddr,
 		Handler:           health.Handler(registry),
@@ -113,4 +125,26 @@ func serve(parent context.Context, cfg config.Config, logger *slog.Logger) error
 	}
 	wg.Wait()
 	return result
+}
+
+func currentExecutableDigest() (string, error) {
+	path, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	if runtime.GOOS == "linux" {
+		// /proc/self/exe follows the running inode, not a mutable current
+		// symlink that an Infrastructure activation may switch concurrently.
+		path = "/proc/self/exe"
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("sha256:%x", hash.Sum(nil)), nil
 }

@@ -10,13 +10,22 @@ import (
 )
 
 type Registry struct {
-	version string
-	commit  string
+	buildInfo BuildInfo
 
 	mu        sync.RWMutex
 	listeners map[string]bool
 	counters  map[counterKey]uint64
 	durations map[durationKey]durationValue
+}
+
+// BuildInfo is safe, immutable revision evidence for the running executable.
+// It intentionally contains no host, endpoint, credential, or configuration
+// values.
+type BuildInfo struct {
+	Version          string `json:"version"`
+	Commit           string `json:"commit"`
+	BuildDate        string `json:"build_date"`
+	ExecutableDigest string `json:"executable_digest"`
 }
 
 type counterKey struct {
@@ -37,19 +46,37 @@ type durationValue struct {
 }
 
 func New(version, commit string) *Registry {
-	if strings.TrimSpace(version) == "" {
-		version = "dev"
+	return NewWithBuildInfo(BuildInfo{Version: version, Commit: commit})
+}
+
+func NewWithBuildInfo(info BuildInfo) *Registry {
+	if strings.TrimSpace(info.Version) == "" {
+		info.Version = "dev"
 	}
-	if strings.TrimSpace(commit) == "" {
-		commit = "unknown"
+	if strings.TrimSpace(info.Commit) == "" {
+		info.Commit = "unknown"
+	}
+	if strings.TrimSpace(info.BuildDate) == "" {
+		info.BuildDate = "unknown"
+	}
+	if strings.TrimSpace(info.ExecutableDigest) == "" {
+		info.ExecutableDigest = "unknown"
 	}
 	return &Registry{
-		version:   version,
-		commit:    commit,
+		buildInfo: info,
 		listeners: make(map[string]bool),
 		counters:  make(map[counterKey]uint64),
 		durations: make(map[durationKey]durationValue),
 	}
+}
+
+func (r *Registry) BuildInfo() BuildInfo {
+	if r == nil {
+		return BuildInfo{}
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.buildInfo
 }
 
 func (r *Registry) SetListener(listener string, active bool) {
@@ -134,7 +161,7 @@ func (r *Registry) Render() string {
 	for key, value := range r.durations {
 		durations[key] = value
 	}
-	version, commit := r.version, r.commit
+	buildInfo := r.buildInfo
 	r.mu.RUnlock()
 
 	var b strings.Builder
@@ -178,7 +205,14 @@ func (r *Registry) Render() string {
 	}
 
 	writeHelpType(&b, "stun_build_info", "Build metadata for the running STUN service.", "gauge")
-	fmt.Fprintf(&b, "stun_build_info{commit=%s,version=%s} 1\n", quote(commit), quote(version))
+	fmt.Fprintf(
+		&b,
+		"stun_build_info{build_date=%s,commit=%s,executable_digest=%s,version=%s} 1\n",
+		quote(buildInfo.BuildDate),
+		quote(buildInfo.Commit),
+		quote(buildInfo.ExecutableDigest),
+		quote(buildInfo.Version),
+	)
 	return b.String()
 }
 

@@ -3,6 +3,9 @@ package integration_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -74,13 +77,30 @@ func TestStandaloneBinaryEndToEnd(t *testing.T) {
 		t.Fatal("request above burst was not rate limited")
 	}
 
-	for _, path := range []string{"/healthz", "/readyz", "/metrics"} {
+	for _, path := range []string{"/healthz", "/readyz", "/revisionz", "/metrics"} {
 		body := get(t, baseURL+path)
 		if path == "/metrics" {
 			for _, metric := range []string{"stun_requests_total", "stun_responses_total", "stun_invalid_requests_total", "stun_rate_limited_total", "stun_active_listeners", "stun_request_duration_seconds", "stun_build_info"} {
 				if !strings.Contains(body, metric) {
 					t.Fatalf("metrics missing %s", metric)
 				}
+			}
+		}
+		if path == "/revisionz" {
+			content, err := os.ReadFile(exe)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var revision struct {
+				Commit           string `json:"commit"`
+				ExecutableDigest string `json:"executable_digest"`
+			}
+			if err := json.Unmarshal([]byte(body), &revision); err != nil {
+				t.Fatal(err)
+			}
+			digest := sha256.Sum256(content)
+			if revision.Commit != "unknown" || revision.ExecutableDigest != fmt.Sprintf("sha256:%x", digest) {
+				t.Fatalf("revision = %#v", revision)
 			}
 		}
 	}

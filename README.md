@@ -80,6 +80,7 @@ The image runs as a non-root user. `deploy/docker/docker-compose.example.yml` pi
 - `GET http://127.0.0.1:9090/healthz` reports process health.
 - `GET http://127.0.0.1:9090/readyz` returns success only while at least one UDP listener is active.
 - `GET http://127.0.0.1:9090/metrics` returns Prometheus text format for the host-local Alloy agent.
+- `GET http://127.0.0.1:9090/revisionz` returns the running executable's SHA-256 digest, commit, version, and build date for Infrastructure diagnostics. These fields are also present in `stun_build_info`; they contain no client or deployment configuration data.
 
 The HTTP listener is required to use a loopback address. Health, readiness, and metrics are not part of the public network contract; only STUN on UDP port 3478 is exposed externally.
 

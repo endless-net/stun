@@ -19,6 +19,13 @@ func Handler(registry *metrics.Registry) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
+	mux.HandleFunc("GET /revisionz", func(w http.ResponseWriter, _ *http.Request) {
+		if registry == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable"})
+			return
+		}
+		writeJSON(w, http.StatusOK, registry.BuildInfo())
+	})
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 		if registry != nil {
