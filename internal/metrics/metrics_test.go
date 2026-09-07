@@ -7,7 +7,12 @@ import (
 )
 
 func TestRegistryRendersRequiredMetricsWithoutSourceIPLabels(t *testing.T) {
-	r := New("v1.2.3", "abc123")
+	r := NewWithBuildInfo(BuildInfo{
+		Version:          "v1.2.3",
+		Commit:           "abc123",
+		BuildDate:        "2026-08-02T00:00:00Z",
+		ExecutableDigest: "sha256:1234",
+	})
 	r.SetListener("127.0.0.1:3478", true)
 	r.RecordRequest("127.0.0.1:3478", "ipv4")
 	r.RecordResponse("127.0.0.1:3478", "ipv4")
@@ -26,7 +31,7 @@ func TestRegistryRendersRequiredMetricsWithoutSourceIPLabels(t *testing.T) {
 		"stun_active_listeners",
 		"stun_request_duration_seconds_sum",
 		"stun_request_duration_seconds_count",
-		`stun_build_info{commit="abc123",version="v1.2.3"} 1`,
+		`stun_build_info{build_date="2026-08-02T00:00:00Z",commit="abc123",executable_digest="sha256:1234",version="v1.2.3"} 1`,
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("metrics missing %q:\n%s", want, rendered)
@@ -41,5 +46,18 @@ func TestRegistryRendersRequiredMetricsWithoutSourceIPLabels(t *testing.T) {
 	r.SetListener("127.0.0.1:3478", false)
 	if r.Ready() {
 		t.Fatal("registry remained ready without active listeners")
+	}
+}
+
+func TestBuildInfoReturnsSafeRevisionFields(t *testing.T) {
+	want := BuildInfo{
+		Version:          "commit-abc123",
+		Commit:           "abc123",
+		BuildDate:        "2026-08-02T00:00:00Z",
+		ExecutableDigest: "sha256:1234",
+	}
+	r := NewWithBuildInfo(want)
+	if got := r.BuildInfo(); got != want {
+		t.Fatalf("BuildInfo() = %#v, want %#v", got, want)
 	}
 }
