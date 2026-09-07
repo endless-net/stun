@@ -16,7 +16,7 @@ import (
 
 func TestServerAnswersBindingAndSurvivesMalformedDatagram(t *testing.T) {
 	addr := reserveUDPAddr(t)
-	registry := metrics.New("test", "test")
+	registry := metrics.New(metrics.BuildInfo{Version: "test", Commit: "test"})
 	cancel, errCh := startTestServer(t, addr, registry, ratelimit.New(100, 100))
 	defer stopTestServer(t, cancel, errCh)
 
@@ -40,7 +40,7 @@ func TestServerAnswersBindingAndSurvivesMalformedDatagram(t *testing.T) {
 
 func TestServerRateLimitsBySourceIP(t *testing.T) {
 	addr := reserveUDPAddr(t)
-	registry := metrics.New("test", "test")
+	registry := metrics.New(metrics.BuildInfo{Version: "test", Commit: "test"})
 	cancel, errCh := startTestServer(t, addr, registry, ratelimit.New(1, 1))
 	defer stopTestServer(t, cancel, errCh)
 
@@ -61,7 +61,7 @@ func TestServerRateLimitsBySourceIP(t *testing.T) {
 func TestServerRejectsListenerError(t *testing.T) {
 	err := (Server{
 		Addr:    "not-an-address",
-		Metrics: metrics.New("test", "test"),
+		Metrics: metrics.New(metrics.BuildInfo{Version: "test", Commit: "test"}),
 		Limiter: ratelimit.New(1, 1),
 		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}).ListenAndServe(context.Background())

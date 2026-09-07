@@ -2,24 +2,15 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"errors"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
-	"runtime"
-	"sync"
 	"syscall"
-	"time"
 
 	"github.com/endless-net/stun/internal/config"
-	"github.com/endless-net/stun/internal/health"
 	"github.com/endless-net/stun/internal/metrics"
-	"github.com/endless-net/stun/internal/ratelimit"
-	"github.com/endless-net/stun/internal/stun"
+	"github.com/endless-net/stun/internal/service"
 )
 
 var (
@@ -58,93 +49,9 @@ func run(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	logger.Info("STUN service starting", "version", version, "commit", commit, "metrics_address", cfg.MetricsAddr)
-	if err := serve(ctx, cfg, logger, executableDigest); err != nil {
+	if err := service.Run(ctx, cfg, logger, metrics.BuildInfo{Version: version, Commit: commit, BuildDate: buildDate, ExecutableDigest: executableDigest}); err != nil {
 		return err
 	}
 	logger.Info("STUN service stopped")
 	return nil
-}
-
-func serve(parent context.Context, cfg config.Config, logger *slog.Logger, executableDigest string) error {
-	ctx, cancel := context.WithCancel(parent)
-	defer cancel()
-	registry := metrics.NewWithBuildInfo(metrics.BuildInfo{
-		Version:          version,
-		Commit:           commit,
-		BuildDate:        buildDate,
-		ExecutableDigest: executableDigest,
-	})
-	httpServer := &http.Server{
-		Addr:              cfg.MetricsAddr,
-		Handler:           health.Handler(registry),
-		ReadHeaderTimeout: 5 * time.Second,
-		IdleTimeout:       60 * time.Second,
-		MaxHeaderBytes:    1 << 16,
-	}
-
-	errCh := make(chan error, len(cfg.ListenAddrs)+1)
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		err := httpServer.ListenAndServe()
-		if errors.Is(err, http.ErrServerClosed) {
-			err = nil
-		}
-		errCh <- err
-	}()
-	for _, addr := range cfg.ListenAddrs {
-		server := stun.Server{
-			Addr:    addr,
-			Metrics: registry,
-			Limiter: ratelimit.New(cfg.RateLimitPerSecond, cfg.RateLimitBurst),
-			Logger:  logger,
-		}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			errCh <- server.ListenAndServe(ctx)
-		}()
-	}
-
-	var result error
-	select {
-	case <-parent.Done():
-	case err := <-errCh:
-		if err != nil {
-			result = err
-		} else if parent.Err() == nil {
-			result = errors.New("service component stopped unexpectedly")
-		}
-	}
-	cancel()
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer shutdownCancel()
-	if err := httpServer.Shutdown(shutdownCtx); err != nil && result == nil {
-		result = fmt.Errorf("shut down health server: %w", err)
-	}
-	wg.Wait()
-	return result
-}
-
-func currentExecutableDigest() (string, error) {
-	path, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-	if runtime.GOOS == "linux" {
-		// /proc/self/exe follows the running inode, not a mutable current
-		// symlink that an Infrastructure activation may switch concurrently.
-		path = "/proc/self/exe"
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-	hash := sha256.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("sha256:%x", hash.Sum(nil)), nil
 }

@@ -1,32 +1,50 @@
 name: CI
 
+run-name: ${{ inputs.operation == 'publish' && inputs.commit_sha || github.event.head_commit.message || github.event.pull_request.title || 'STUN checks' }}
+
 on:
-  workflow_dispatch:
   pull_request:
   push:
     branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Run checks or publish an immutable production artifact
+        type: choice
+        options: [check, publish]
+        default: check
+        required: true
+      commit_sha:
+        description: Full main commit SHA (required for publish)
+        type: string
+        required: false
 
 permissions:
   contents: read
 
+# Supersede obsolete checks; never cancel a release or a publication.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.operation }}-${{ inputs.commit_sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
 
 jobs:
   stun-e2e-linux:
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.operation == 'check')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/product-e2e
   stun-e2e-windows:
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.operation == 'check')
     runs-on: windows-2025
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/product-e2e
   stun-e2e-container:
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.operation == 'check')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -34,7 +52,8 @@ jobs:
       - uses: ./.github/actions/product-e2e
         with:
           container: 'true'
-  verify:
+  go-tests:
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.operation == 'check')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -50,6 +69,17 @@ jobs:
         run: ./scripts/check-licenses.sh
       - name: Unit and integration tests
         run: go test ./...
+      - name: Build binaries
+        run: go build ./cmd/endlessnet-stun ./cmd/endlessnet-stun-smoke
+      - name: Verify generated state is clean
+        run: git diff --exit-code
+
+  race:
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.operation == 'check')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
       - name: Race tests
         run: >-
           docker run --rm --platform linux/amd64
@@ -57,20 +87,60 @@ jobs:
           -e GOTOOLCHAIN=local -e CGO_ENABLED=1
           golang:1.27.0-bookworm@sha256:ba5ef6614ca131b80a635fc6a7b715d9ee8a7f333debdbb81afb68259c7d48d4
           sh -ec 'git config --global --add safe.directory /src && go test -race ./...'
+
+  lint:
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.operation == 'check')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.mod
       - name: Vet
         run: go vet ./...
-      - name: Build binaries
-        run: go build ./cmd/endlessnet-stun ./cmd/endlessnet-stun-smoke
-      - name: Test production artifact contract
-        run: bash scripts/test-production-contracts.sh
       - name: Lint deployment scripts
         run: docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d scripts/*.sh
+      - name: Check Go formatting
+        run: test -z "$(gofmt -l cmd internal test)"
+
+  contracts:
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.operation == 'check')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test production artifact contract
+        run: bash scripts/test-production-contracts.sh
+      - name: Test exact-commit evidence gates
+        run: bash scripts/test-e2e-evidence.sh
+
+  dependency-scan:
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.operation == 'check')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.mod
       - name: Vulnerability scan
         uses: golang/govulncheck-action@v1
         with:
           go-version-input: 1.27.0
           go-package: ./...
           cache: false
+
+  container:
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.operation == 'check')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
       - name: Build container
@@ -93,5 +163,363 @@ jobs:
           exit-code: "1"
           ignore-unfixed: true
           severity: HIGH,CRITICAL
-      - name: Verify generated state is clean
-        run: git diff --exit-code
+
+  verify:
+    if: always() && (github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.operation == 'check'))
+    needs: [go-tests, race, lint, contracts, dependency-scan, container]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every quality job to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: jq -e 'all(.[]; .result == "success")' <<< "$RESULTS"
+
+  signoff:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require Signed-off-by on every pull request commit
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$BASE_SHA"
+          failed=false
+          while read -r commit; do
+            if ! git show -s --format=%B "$commit" \
+              | grep -Eiq '^Signed-off-by: .+ <[^<>]+>$'; then
+              echo "::error::commit $commit is missing a valid Signed-off-by trailer"
+              failed=true
+            fi
+          done < <(git rev-list "$BASE_SHA..$HEAD_SHA")
+          if "$failed"; then
+            exit 1
+          fi
+
+  analyze:
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.operation == 'check')
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+          - language: go
+            build-mode: autobuild
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: matrix.language == 'go'
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: github/codeql-action/init@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+      - uses: github/codeql-action/autobuild@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        if: matrix.build-mode == 'autobuild'
+      - uses: github/codeql-action/analyze@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+
+  protobuf:
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.operation == 'check')
+    name: Buf validation (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: bufbuild/buf-action@v1
+        with:
+          version: 1.72.0
+          setup_only: true
+      - name: Validate protobuf contract
+        shell: bash
+        run: |
+          set -o pipefail
+          report=protobuf-contract-report.txt
+          if ! find proto -type f -name '*.proto' -print -quit | grep -q .; then
+            printf 'SKIPPED: no protobuf contract has been added yet.\n' | tee "$report"
+            echo "::notice title=Protobuf contract::SKIPPED: no .proto files"
+            exit 0
+          fi
+
+          result=PASS
+          if ! buf lint 2>&1 | tee "$report"; then
+            result=FAIL
+          fi
+          if ! buf build 2>&1 | tee -a "$report"; then
+            result=FAIL
+          fi
+
+          baseline="$(find contracts/proto-baseline -type f -name '*.binpb' -print -quit)"
+          if [ -n "$baseline" ]; then
+            if ! buf breaking proto --against "$baseline" 2>&1 | tee -a "$report"; then
+              result=FAIL
+            fi
+          else
+            printf 'SKIPPED: no released protobuf baseline exists yet.\n' | tee -a "$report"
+          fi
+
+          if [ "$result" = PASS ]; then
+            echo "::notice title=Protobuf contract::PASS"
+          else
+            echo "::warning title=Protobuf contract::FAIL (advisory); see artifact"
+          fi
+          exit 0
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: protobuf-contract-report
+          path: protobuf-contract-report.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    concurrency:
+      group: stun-release-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      attestations: write
+      contents: write
+      id-token: write
+      packages: write
+      pull-requests: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.mod
+      - name: Validate semantic version
+        shell: bash
+        run: |
+          [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
+      - name: Verify merged PR provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/verify-production-provenance.sh --version "$GITHUB_REF_NAME"
+      - name: Verify release source
+        run: ./scripts/verify.sh
+      - name: Require exact-commit product E2E
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/verify-e2e-evidence.sh "$(git rev-parse HEAD)"
+      - name: Build release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          ldflags="-s -w -X main.version=${GITHUB_REF_NAME} -X main.commit=${GITHUB_SHA} -X main.buildDate=${build_date}"
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -ldflags "$ldflags" -o "dist/endlessnet-stun_${GITHUB_REF_NAME}_linux_${arch}" ./cmd/endlessnet-stun
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -o "dist/endlessnet-stun-smoke_${GITHUB_REF_NAME}_linux_${arch}" ./cmd/endlessnet-stun-smoke
+          done
+          cp LICENSE NOTICE THIRD_PARTY_NOTICES dist/
+          (cd dist && sha256sum endlessnet-stun* > checksums.txt)
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Derive immutable image tags
+        id: tags
+        shell: bash
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          major=${version%%.*}
+          remainder=${version#*.}
+          minor=${remainder%%.*}
+          {
+            echo "tags<<EOF"
+            echo "ghcr.io/${GITHUB_REPOSITORY}-public:${GITHUB_REF_NAME}"
+            echo "ghcr.io/${GITHUB_REPOSITORY}-public:${major}.${minor}"
+            echo "ghcr.io/${GITHUB_REPOSITORY}-public:${major}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+      - uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/source-sbom.spdx.json
+      - uses: actions/attest-build-provenance@v4
+        if: ${{ github.event.repository.visibility == 'public' }}
+        with:
+          subject-path: dist/endlessnet-stun*
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*
+          generate_release_notes: true
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'publish' && github.ref == 'refs/heads/main'
+    concurrency:
+      group: stun-production-publication-${{ inputs.commit_sha }}
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    name: Build, attest, and publish immutable artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: source
+    outputs:
+      artifact_digest: ${{ steps.bundle.outputs.artifact_digest }}
+      package_digest: ${{ steps.metadata.outputs.package_digest }}
+      provenance_reference: ${{ steps.bundle.outputs.provenance_reference }}
+      sigstore_rekor_index: ${{ steps.sign.outputs.sigstore_rekor_index }}
+    steps:
+      - name: Check out publisher scripts at the workflow revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: scripts
+          persist-credentials: false
+      - name: Check out application revision
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.commit_sha }}
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify publication commit
+        env:
+          PUBLISH_COMMIT_SHA: ${{ inputs.commit_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$PUBLISH_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_REF" = refs/heads/main
+          test "$(git rev-parse HEAD)" = "$PUBLISH_COMMIT_SHA"
+          git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+          git merge-base --is-ancestor HEAD refs/remotes/origin/main
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: source/go.mod
+          cache: true
+          cache-dependency-path: source/go.mod
+
+      - name: Resolve exact green CI evidence
+        id: ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+          PUBLISHER_COMMIT_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit_ci_run_id=$(bash ../scripts/verify-e2e-evidence.sh "$COMMIT_SHA")
+          publisher_ci_run_id=$(bash ../scripts/verify-e2e-evidence.sh "$PUBLISHER_COMMIT_SHA")
+          {
+            echo "commit_ci_run_id=$commit_ci_run_id"
+            echo "publisher_ci_run_id=$publisher_ci_run_id"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Verify release source
+        run: ./scripts/verify.sh
+      - name: Build immutable deployment bundle
+        id: bundle
+        env:
+          PUBLISH_COMMIT_SHA: ${{ inputs.commit_sha }}
+          COMMIT_CI_RUN_ID: ${{ steps.ci.outputs.commit_ci_run_id }}
+          PUBLISHER_CI_RUN_ID: ${{ steps.ci.outputs.publisher_ci_run_id }}
+        shell: bash
+        run: bash ../scripts/build-production-bundle.sh
+
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v4.1.2
+
+      - name: Sign and verify archive provenance
+        id: sign
+        env:
+          MANIFEST: ${{ steps.bundle.outputs.manifest }}
+          PROVENANCE: ${{ steps.bundle.outputs.provenance }}
+          PROVENANCE_BUNDLE: ${{ steps.bundle.outputs.provenance_bundle }}
+        shell: bash
+        run: bash ../scripts/sign-production-provenance.sh
+
+      - name: Test production artifact contract
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+          COMMIT_CI_RUN_ID: ${{ steps.ci.outputs.commit_ci_run_id }}
+          PRODUCER_REPOSITORY: ${{ github.repository }}
+          PRODUCER_RUN_ID: ${{ github.run_id }}
+          PUBLISHER_COMMIT_SHA: ${{ github.sha }}
+          PUBLISHER_CI_RUN_ID: ${{ steps.ci.outputs.publisher_ci_run_id }}
+          ARTIFACT_DIGEST: ${{ steps.bundle.outputs.artifact_digest }}
+          SIGSTORE_REKOR_INDEX: ${{ steps.sign.outputs.sigstore_rekor_index }}
+        shell: bash
+        run: bash ../scripts/verify-production-artifact.sh
+
+      - name: Upload immutable artifact
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: endlessnet-stun-${{ inputs.commit_sha }}
+          path: |
+            ${{ steps.bundle.outputs.archive }}
+            ${{ steps.bundle.outputs.checksum }}
+            ${{ steps.bundle.outputs.manifest }}
+            ${{ steps.bundle.outputs.provenance }}
+            ${{ steps.bundle.outputs.provenance_bundle }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish immutable artifact metadata
+        id: metadata
+        env:
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+          RAW_PACKAGE_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+          ARTIFACT_DIGEST: ${{ steps.bundle.outputs.artifact_digest }}
+          PROVENANCE_REFERENCE: ${{ steps.bundle.outputs.provenance_reference }}
+          COMMIT_CI_RUN_ID: ${{ steps.ci.outputs.commit_ci_run_id }}
+          PUBLISHER_COMMIT_SHA: ${{ github.sha }}
+          PUBLISHER_CI_RUN_ID: ${{ steps.ci.outputs.publisher_ci_run_id }}
+          SIGSTORE_REKOR_INDEX: ${{ steps.sign.outputs.sigstore_rekor_index }}
+        shell: bash
+        run: bash ../scripts/publish-production-metadata.sh

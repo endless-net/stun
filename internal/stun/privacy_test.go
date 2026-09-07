@@ -44,9 +44,9 @@ func TestWriteErrorLogsDoNotExposeClient(t *testing.T) {
 		t.Fatal(err)
 	}
 	var logs bytes.Buffer
-	r := metrics.New("test", "test")
+	r := metrics.New(metrics.BuildInfo{Version: "test", Commit: "test"})
 	s := Server{Metrics: r, Limiter: ratelimit.New(100, 100), Logger: slog.New(slog.NewJSONHandler(&logs, nil))}
-	if err := s.serve(context.Background(), &failingPacketConn{request: req}); err != nil {
+	if err := s.Serve(context.Background(), &failingPacketConn{request: req}); err != nil {
 		t.Fatal(err)
 	}
 	for _, secret := range []string{"192.0.2.99", "54321", "private-packet-body"} {

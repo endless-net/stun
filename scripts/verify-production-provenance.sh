@@ -47,12 +47,6 @@ merged_pr_count=$(
   exit 1
 }
 if (( merged_pr_count == 0 )); then
-  root_commit=$(git rev-list --max-parents=0 refs/remotes/origin/main)
-  commit_count=$(git rev-list --count refs/remotes/origin/main)
-  if [[ "$version" == v1.0.10 && "$commit_count" == 1 && "$release_commit" == "$root_commit" ]]; then
-    echo "verified $version as the single-commit public baseline"
-    exit 0
-  fi
   echo "$version commit $release_commit was not delivered through a merged PR into main" >&2
   exit 1
 fi

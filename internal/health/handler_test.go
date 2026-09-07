@@ -11,7 +11,7 @@ import (
 )
 
 func TestHealthReadinessAndMetrics(t *testing.T) {
-	r := metrics.NewWithBuildInfo(metrics.BuildInfo{
+	r := metrics.New(metrics.BuildInfo{
 		Version:          "test-version",
 		Commit:           "test-commit",
 		BuildDate:        "2026-08-02T00:00:00Z",

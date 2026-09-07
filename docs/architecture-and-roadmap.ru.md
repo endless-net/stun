@@ -60,6 +60,7 @@ flowchart LR
 | `internal/stun/server.go` | UDP read/process/write loop, логирование, метрики, rate limit |
 | `internal/ratelimit` | In-memory token bucket по IP источника |
 | `internal/metrics` | Потокобезопасный Prometheus registry без внешних зависимостей |
+| `internal/service` | Резервирование сокетов, запуск и остановка всех компонентов |
 | `internal/health` | `/healthz`, `/readyz`, `/metrics` |
 | `cmd/endlessnet-stun-smoke` | Реальный внешний Binding probe для проверки развертывания |
 
@@ -131,8 +132,8 @@ Comprehension-optional атрибуты запроса игнорируются.
 | Endpoint | Значение успешного ответа | Назначение |
 | --- | --- | --- |
 | `GET /healthz` | `200 {"status":"ok"}` | Процесс способен обслужить HTTP handler |
-| `GET /readyz` | `200 {"status":"ready"}` | Активен хотя бы один UDP listener |
-| `GET /readyz` | `503 {"status":"not_ready"}` | Нет активного UDP listener |
+| `GET /readyz` | `200 {"status":"ready"}` | Активны все настроенные UDP listeners |
+| `GET /readyz` | `503 {"status":"not_ready"}` | Хотя бы один настроенный UDP listener не активен |
 | `GET /metrics` | Prometheus text format | Локальный scrape метрик |
 
 `/healthz` не проверяет внешнюю UDP-доступность. После deploy её подтверждает отдельный публичный smoke test.
@@ -224,7 +225,7 @@ production target и не выполняет deployment.
 
 ### 11.2. Commit-addressed production publication
 
-Отдельный producer workflow принимает полный commit SHA из `main`, требует
+Job `publish` единого `.github/workflows/ci.yml` принимает полный commit SHA из `main`, требует
 green CI точной application revision и версии publisher workflow и публикует
 один immutable Actions artifact `endlessnet-stun-<commit_sha>`. В его архиве
 находятся AMD64/ARM64 бинарники сервиса и smoke-клиента, systemd unit и license

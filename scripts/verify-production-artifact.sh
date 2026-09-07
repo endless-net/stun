@@ -12,7 +12,7 @@ set -euo pipefail
 : "${ARTIFACT_DIGEST:?ARTIFACT_DIGEST is required}"
 : "${SIGSTORE_REKOR_INDEX:?SIGSTORE_REKOR_INDEX is required}"
 
-producer_workflow=.github/workflows/publish-production.yml
+producer_workflow=.github/workflows/ci.yml
 artifact_name="endlessnet-stun-$COMMIT_SHA"
 archive_name="$artifact_name.tar.gz"
 archive="$ARTIFACT_DIR/$archive_name"
