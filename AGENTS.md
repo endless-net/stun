@@ -7,6 +7,10 @@
 - Format every commit message according to Conventional Commits, for example
   `feat: ...`, `fix: ...`, `docs: ...`, or `chore: ...`.
 
+## Modernization
+
+- Do not preserve legacy behavior, deprecated interfaces, or backward compatibility.
+
 ## Repository boundary
 
 - Work only within this repository.
