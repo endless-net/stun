@@ -3,7 +3,8 @@
 Этот репозиторий публикует immutable STUN-артефакты. Он не выбирает production
 узлы, не имеет inventory или host credentials и не выполняет activation,
 rollout или rollback. Эти операции принадлежат Infrastructure согласно D-014
-и D-025 и запускаются единым released manifest.
+и D-026 и запускаются отдельным STUN desired state. STUN — самостоятельный
+продукт; он не входит в общий server released manifest EndlessNet.
 
 ## Commit-addressed publication
 
@@ -22,7 +23,7 @@ Publisher проверяет layout, checksum, manifest и provenance до uploa
 
 ## Handoff
 
-Infrastructure должна забрать exact artifact из released manifest, проверить
+Infrastructure должна забрать exact artifact из отдельного STUN desired state, проверить
 его digest и применить собственные процедуры подготовки хоста, activation,
 rolling rollout, readiness/smoke gates и rollback. STUN не поставляет скрипты
 удалённой установки и не является orchestrator-ом production.
@@ -38,6 +39,6 @@ Infrastructure endpoint:
 ./bin/endlessnet-stun-smoke --stun-addr stun.example.com:3478 --timeout 5s
 ```
 
-Любые production failure и rollback расследуются в Infrastructure по released
-manifest и rollout telemetry; в STUN изменяется только следующий immutable
+Любые production failure и rollback расследуются в Infrastructure по STUN
+desired state и rollout telemetry; в STUN изменяется только следующий immutable
 artifact.

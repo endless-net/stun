@@ -55,6 +55,9 @@ func BuildBindingResponse(request []byte, remote *net.UDPAddr) ([]byte, error) {
 }
 
 func ParseBindingResponse(response []byte, expected TransactionID) (*net.UDPAddr, error) {
+	if len(response) > MaxDatagramSize {
+		return nil, errors.New("STUN response exceeds the maximum datagram size")
+	}
 	if len(response) < HeaderLength {
 		return nil, errors.New("STUN response is shorter than the header")
 	}
@@ -72,7 +75,11 @@ func ParseBindingResponse(response []byte, expected TransactionID) (*net.UDPAddr
 		return nil, errors.New("STUN response transaction ID mismatch")
 	}
 	attributes := response[HeaderLength:]
-	for len(attributes) >= 4 {
+	var mapped *net.UDPAddr
+	for len(attributes) > 0 {
+		if len(attributes) < 4 {
+			return nil, errors.New("STUN attribute header is truncated")
+		}
 		attributeType := binary.BigEndian.Uint16(attributes[0:2])
 		attributeLength := int(binary.BigEndian.Uint16(attributes[2:4]))
 		next := 4 + paddedLength(attributeLength)
@@ -80,9 +87,20 @@ func ParseBindingResponse(response []byte, expected TransactionID) (*net.UDPAddr
 			return nil, errors.New("STUN attribute length exceeds the datagram")
 		}
 		if attributeType == xorMappedAddress {
-			return parseXORMappedAddress(attributes[4:4+attributeLength], expected)
+			value, err := parseXORMappedAddress(attributes[4:4+attributeLength], expected)
+			if err != nil {
+				return nil, err
+			}
+			if mapped == nil {
+				mapped = value
+			}
+		} else if attributeType < 0x8000 {
+			return nil, fmt.Errorf("unsupported required STUN response attribute 0x%04x", attributeType)
 		}
 		attributes = attributes[next:]
+	}
+	if mapped != nil {
+		return mapped, nil
 	}
 	return nil, errors.New("STUN response is missing XOR-MAPPED-ADDRESS")
 }

@@ -1,0 +1,36 @@
+name: Product E2E
+description: Test standalone binaries or image with an independent local wire client
+inputs:
+  container:
+    description: Test the Linux container
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v7
+      with:
+        go-version-file: go.mod
+        cache: false
+    - name: Prepare evidence
+      shell: bash
+      run: mkdir -p "$RUNNER_TEMP/stun-e2e"
+    - name: Build product image
+      if: inputs.container == 'true'
+      shell: bash
+      run: docker build --tag stun-product-e2e .
+    - name: Run product scenarios
+      shell: bash
+      env:
+        STUN_E2E_EVIDENCE: ${{ runner.temp }}/stun-e2e
+        STUN_E2E_IMAGE: ${{ inputs.container == 'true' && 'stun-product-e2e' || '' }}
+      run: |
+        set -euo pipefail
+        go test -tags=e2e -json -count=1 -timeout=4m ./test/e2e > "$STUN_E2E_EVIDENCE/results.jsonl"
+        node scripts/check-e2e-results.mjs "$STUN_E2E_EVIDENCE/results.jsonl"
+    - name: Upload product evidence
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ github.job }}-${{ runner.os }}-${{ github.sha }}
+        path: ${{ runner.temp }}/stun-e2e
+        if-no-files-found: error

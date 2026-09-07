@@ -33,6 +33,10 @@ func (s Server) ListenAndServe(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("listen for STUN on %s: %w", s.Addr, err)
 	}
+	return s.serve(ctx, conn)
+}
+
+func (s Server) serve(ctx context.Context, conn net.PacketConn) error {
 	defer conn.Close()
 	listener := conn.LocalAddr().String()
 	s.Metrics.SetListener(listener, true)
@@ -57,12 +61,12 @@ func (s Server) ListenAndServe(ctx context.Context) error {
 	buffer := make([]byte, MaxDatagramSize+1)
 	for {
 		n, remoteAddr, readErr := conn.ReadFrom(buffer)
-		if readErr != nil {
+		if readErr != nil && !isDatagramTruncated(readErr) {
 			if ctx.Err() != nil || errors.Is(readErr, net.ErrClosed) {
 				return nil
 			}
 			s.Metrics.RecordError(listener, "read_error")
-			return fmt.Errorf("read STUN datagram on %s: %w", listener, readErr)
+			return fmt.Errorf("read STUN datagram on %s: read_error", listener)
 		}
 		started := time.Now()
 		remote, ok := remoteAddr.(*net.UDPAddr)
@@ -74,7 +78,7 @@ func (s Server) ListenAndServe(ctx context.Context) error {
 			logger.Debug("STUN datagram rejected", "listener", listener, "remote_address", "redacted", "result", "rejected", "error_code", "non_udp_source")
 			continue
 		}
-		if n > MaxDatagramSize {
+		if n > MaxDatagramSize || isDatagramTruncated(readErr) {
 			s.Metrics.RecordInvalid(listener, family)
 			s.Metrics.ObserveDuration(listener, "invalid", time.Since(started))
 			logger.Debug("STUN datagram rejected", "listener", listener, "remote_address", "redacted", "result", "rejected", "error_code", "datagram_too_large")
@@ -96,7 +100,7 @@ func (s Server) ListenAndServe(ctx context.Context) error {
 		if _, writeErr := conn.WriteTo(response, remote); writeErr != nil {
 			s.Metrics.RecordError(listener, "write_error")
 			s.Metrics.ObserveDuration(listener, "error", time.Since(started))
-			logger.Warn("STUN response failed", "listener", listener, "remote_address", "redacted", "result", "error", "error_code", "write_error", "error", writeErr)
+			logger.Warn("STUN response failed", "listener", listener, "remote_address", "redacted", "result", "error", "error_code", "write_error")
 			continue
 		}
 		s.Metrics.RecordResponse(listener, family)

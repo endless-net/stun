@@ -1,11 +1,11 @@
 # EndlessNet STUN
 
-`endlessnet-stun` is the autonomous, stateless STUN infrastructure service used by EndlessNet clients to discover their public UDP mapping. It accepts standard UDP Binding requests and does not depend on the EndlessNet control plane, database, credentials, or internal Go packages.
+`endlessnet-stun` is a standalone STUN product. EndlessNet integrates it through standard UDP Binding to discover public UDP mappings; other compatible clients can use it independently. It does not depend on the EndlessNet control plane, database, credentials, or internal Go packages.
 
 This repository owns the STUN source, tests, immutable artifacts, publication,
 container image, and service configuration examples. Production inventory, host
 access, activation, rollout, and rollback belong exclusively to Infrastructure
-under D-014/D-025. The public history in this repository is authoritative.
+under D-014/D-026. The public history in this repository is authoritative.
 Endpoint selection and client-side Binding behavior are owned by their
 respective consumers.
 
@@ -79,7 +79,7 @@ The image runs as a non-root user. `deploy/docker/docker-compose.example.yml` pi
 
 - `GET http://127.0.0.1:9090/healthz` reports process health.
 - `GET http://127.0.0.1:9090/readyz` returns success only while at least one UDP listener is active.
-- `GET http://127.0.0.1:9090/metrics` returns Prometheus text format for the host-local Vector agent.
+- `GET http://127.0.0.1:9090/metrics` returns Prometheus text format for the host-local Alloy agent.
 
 The HTTP listener is required to use a loopback address. Health, readiness, and metrics are not part of the public network contract; only STUN on UDP port 3478 is exposed externally.
 
@@ -87,7 +87,7 @@ Metrics include `stun_requests_total`, `stun_responses_total`, `stun_invalid_req
 
 ## Release process
 
-Tags matching `vMAJOR.MINOR.PATCH` run the release workflow. A tag is accepted only when its commit is reachable from `origin/main` and GitHub associates that commit with a merged pull request whose base is `main`. The workflow repeats the quality gate, builds Linux AMD64 and ARM64 server and smoke-test binaries, creates SHA256 checksums, publishes a GitHub Release, and pushes immutable GHCR tags for the exact version, major/minor line, and major line. Infrastructure consumes the exact `vMAJOR.MINOR.PATCH` artifact and verifies its checksum.
+Tags matching `vMAJOR.MINOR.PATCH` run the release workflow. A tag is accepted only when its commit is reachable from `origin/main` and GitHub associates that commit with a merged pull request whose base is `main`. The workflow repeats the quality gate, requires all three product E2E jobs from a successful main CI run for the exact commit, builds Linux AMD64 and ARM64 server and smoke-test binaries, creates SHA256 checksums, and publishes a GitHub Release and GHCR image. Major and minor image tags are mutable aliases; consumers pin an image digest or an exact binary with its checksum.
 
 Update `CHANGELOG.md` on a feature branch, merge it through a pull request and CI into `main`, and only then create a signed or protected version tag. Direct-push and unmerged commits are rejected by the release provenance check.
 
@@ -107,13 +107,14 @@ uploads one Actions artifact named `endlessnet-stun-<commit_sha>` containing:
 
 The workflow verifies the archive layout, checksum, manifest, provenance, and
 Rekor entry before upload. It has no target, inventory, production credentials,
-or host access. This commit-addressed artifact is the STUN producer side of D-014/D-025;
+or host access. This commit-addressed artifact is the STUN producer side of D-014/D-026;
 the public semver Release and GHCR image remain a separate supported contract.
 
 Publication ends after upload and verification. It does not accept targets or
 inventory, read deployment secrets, connect to hosts, activate a release,
 perform rollout, or rollback. Infrastructure consumes the immutable artifact
-through the released manifest and owns the complete production lifecycle.
+through separate STUN desired state and owns the complete production lifecycle.
+STUN is not a component of the common EndlessNet server released manifest.
 
 ## Troubleshooting
 
@@ -121,6 +122,21 @@ through the released manifest and owns the complete production lifecycle.
 - UDP timeout: verify DNS, host firewall, security group, and `3478/udp`; TCP reachability does not prove STUN reachability.
 - Readiness failure: inspect `systemctl status endlessnet-stun` and confirm at least one configured UDP address can bind.
 - Rate limiting: inspect `stun_rate_limited_total` and adjust both rate and burst deliberately.
-- Production lifecycle issues: inspect the Infrastructure rollout and released manifest; this repository only publishes and verifies artifacts.
+- Production lifecycle issues: inspect the separate Infrastructure STUN desired state and rollout; this repository only publishes and verifies artifacts.
 
 EndlessNet clients continue to obtain endpoints such as `stun1.endlessnet.ru:3478` from signed network maps or control-plane configuration. The client has no dependency on this repository's Go packages or release version.
+
+## Product E2E
+
+CI runs `stun-e2e-linux`, `stun-e2e-windows`, and `stun-e2e-container` on
+GitHub-hosted runners for PRs, main pushes, and manual runs. These required
+checks exercise only this product, using independent UDP wire vectors and real
+server/smoke processes. Linux containers use a local host network. No public
+production endpoint, EndlessNet Client, or control plane is needed.
+
+Run `go test -tags=e2e -count=1 ./test/e2e`. Local IPv6 is required; missing
+capabilities fail instead of silently skipping. Optional `STUN_E2E_EVIDENCE`
+selects an output directory for logs and binary identities; `STUN_E2E_IMAGE`
+selects a prebuilt Linux image. CI preserves JSON test results and identities.
+The publisher also verifies the exact commit's successful product E2E jobs.
+This evidence does not constitute production or full EndlessNet acceptance.
