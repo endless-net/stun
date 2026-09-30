@@ -1,27 +1,51 @@
-# Agents
+# Working Rules
 
-## Git workflow
+## Spec Kit
 
-- Work on a short-lived branch and submit every change through a pull request
-  targeting `main`. Do not push changes directly to `main`.
-- Format every commit message according to Conventional Commits, for example
-  `feat: ...`, `fix: ...`, `docs: ...`, or `chore: ...`.
+- Follow the Spec Kit workflow for all code changes: specification → plan →
+  tasks → consistency analysis → implementation.
+- Use `speckit-specify`, optionally `speckit-clarify`, then `speckit-plan`,
+  `speckit-tasks`, `speckit-analyze`, and `speckit-implement`.
+- Before changing code, read the current `spec.md`, `plan.md`, and `tasks.md`.
+  If they are missing, create them using Spec Kit first.
+- During implementation, follow `tasks.md` and mark completed tasks.
+- If Spec Kit is not configured or unavailable, inform the user;
+  do not silently skip the workflow.
 
-## Modernization
+## Required Checks
 
-- Do not preserve legacy behavior, deprecated interfaces, or backward compatibility.
+After every code change, run all commands from the repository root
+in the following order:
 
-## Repository boundary
+```sh
+goimports -w .
+go vet ./...
+golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m
+go test -short ./...
+govulncheck ./...
+```
 
-- Work only within this repository.
-- Before reading from or writing to any path outside this repository, request
-  and receive the user's explicit permission.
+- `govulncheck` is the tool from `golang.org/x/vuln/cmd/govulncheck`.
+- All checks are mandatory and must pass before committing and pushing.
+- If a check fails, fix the cause and rerun the full set of checks.
+- If a tool, Go module, or configuration is missing, report the blocker;
+  do not claim that an unperformed check passed.
 
-## Version increases
+## Git
 
-- Never increase any version or generation number, including schema, configuration,
-  API, protocol, contract, manifest, migration, artifact, or rollout versions,
-  without the user's direct explicit permission for that exact increase.
-- A request to implement, refactor, fix, remove compatibility, or make a breaking
-  change does not authorize a version increase. Without explicit permission, keep
-  the current version number.
+- Work directly on `main`, without feature branches or pull requests.
+- After completing and validating a change, commit only the files related
+  to the task and immediately push the commit to `main`.
+- Use Conventional Commits for commit messages: `feat:`, `fix:`, `docs:`,
+  `chore:`, or another appropriate type.
+
+## Boundaries and Constraints
+
+- Changing code in other repositories is prohibited. Make all code changes
+  only in this repository.
+- Reading files outside this repository, including other repositories, is allowed
+  without additional permission.
+- Standard tool caches, temporary files, and installed development tools
+  may be stored outside this repository without additional permission.
+- Do not place tool installations or dependency caches inside this repository.
+- Other writes outside this repository require the user's explicit permission.
