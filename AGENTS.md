@@ -1,27 +1,8 @@
-# Agents
+# Working Rules
 
-## Git workflow
-
-- Work on a short-lived branch and submit every change through a pull request
-  targeting `main`. Do not push changes directly to `main`.
-- Format every commit message according to Conventional Commits, for example
-  `feat: ...`, `fix: ...`, `docs: ...`, or `chore: ...`.
-
-## Modernization
-
-- Do not preserve legacy behavior, deprecated interfaces, or backward compatibility.
-
-## Repository boundary
-
-- Work only within this repository.
-- Before reading from or writing to any path outside this repository, request
-  and receive the user's explicit permission.
-
-## Version increases
-
-- Never increase any version or generation number, including schema, configuration,
-  API, protocol, contract, manifest, migration, artifact, or rollout versions,
-  without the user's direct explicit permission for that exact increase.
-- A request to implement, refactor, fix, remove compatibility, or make a breaking
-  change does not authorize a version increase. Without explicit permission, keep
-  the current version number.
+- Before working in this repository, read and follow the shared rules in
+  [servicekit/AGENTS.md](../servicekit/AGENTS.md).
+- Resolve the local path relative to this file. If the local file is unavailable,
+  read and follow [service-kit/AGENTS.md on GitHub](https://github.com/endless-net/service-kit/blob/main/AGENTS.md)
+  from the `main` branch instead. Use authenticated GitHub access if required.
+- If neither source is accessible, report the blocker before making changes.
