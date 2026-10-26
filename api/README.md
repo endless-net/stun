@@ -1,5 +1,16 @@
 # STUN: поддерживаемый стандартный wire profile
 
+## Новая MVP-линейка v0
+
+До отдельно объявленного стабильного major новой линейки обратная совместимость
+НЕ поддерживается, включая patch. Все изменения — hard cutover без shims,
+dual API и fallback ради прошлых версий. Данные сохраняются прямыми миграциями.
+API выпускается независимо от runtime обычным тегом `api/v0.MINOR.PATCH`;
+consumer закрепляет точную опубликованную версию без first-party local `replace`
+и обхода через GOWORK. Wire package identifiers не задают SemVer модуля.
+Короткий CI включает unit/static checks, без integration/E2E и Buf breaking.
+Исторические сравнения ниже — provenance, а не обязательство совместимости.
+
 Producer — STUN, RB-stun. Требования — в
 [единой спецификации workspace](../../../specs/001-endlessnet-project/spec.md).
 Это контракт стандартного UDP Binding, без фиктивного Protobuf RPC/Go module.

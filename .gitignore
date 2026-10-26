@@ -1,0 +1,7 @@
+.artifacts/
+build/
+.dart_tool/
+__pycache__/
+*.py[cod]
+*.exe
+*.test

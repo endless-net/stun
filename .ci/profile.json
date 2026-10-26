@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "component": "stun",
+  "modules": [
+    {
+      "path": ".",
+      "kind": "go"
+    },
+    {
+      "path": "api",
+      "kind": "json",
+      "unit": [
+        "test_wire_vectors.py"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "release": "runtime",
+      "kind": "go",
+      "name": "stun",
+      "module": ".",
+      "package": "./cmd/stun",
+      "target": {
+        "os": "linux",
+        "arch": "amd64"
+      }
+    },
+    {
+      "release": "api",
+      "kind": "source",
+      "name": "stun-api",
+      "path": "api"
+    }
+  ]
+}
