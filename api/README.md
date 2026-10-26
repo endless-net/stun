@@ -42,4 +42,5 @@ python3 -B api/test_wire_vectors.py
 стандартный header, negative disposition и независимо декодирует XOR mapping.
 Production rate limits, IPv6 host acceptance и client retry schedule требуют
 отдельной реализации/приёмки. Host lifecycle, provisioning/deploy/activation
-принадлежат отдельному Infrastructure и здесь не реализуются.
+относятся к внешнему платформенному контуру и здесь не реализуются. Его место
+и владелец остаются открытыми по COMPOSITION-Q-01; STUN и Service Kit их не получают.
