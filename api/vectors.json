@@ -1,0 +1,78 @@
+{
+  "profile": "endlessnet-stun-udp-binding",
+  "status": "candidate-supported-subset",
+  "source": {
+    "revision": "8628d35399ef9b23644e34a340291462493efb04",
+    "path": "docs/supported-protocol.md"
+  },
+  "max_datagram_bytes": 1500,
+  "vectors": [
+    {
+      "id": "ipv4",
+      "request_hex": "000100002112a4420102030405060708090a0b0c",
+      "source_address": "203.0.113.7",
+      "source_port": 54321,
+      "outcome": "success",
+      "response_hex": "0101000c2112a4420102030405060708090a0b0c002000080001f523ea12d545"
+    },
+    {
+      "id": "ipv6",
+      "request_hex": "000100002112a4420102030405060708090a0b0c",
+      "source_address": "2001:db8::1",
+      "source_port": 3478,
+      "outcome": "success",
+      "response_hex": "010100182112a4420102030405060708090a0b0c0020001400022c840113a9fa0102030405060708090a0b0d"
+    },
+    {
+      "id": "short-header",
+      "request_hex": "000100002112a4420102030405060708090a0b",
+      "source_address": "203.0.113.7",
+      "source_port": 54321,
+      "outcome": "drop"
+    },
+    {
+      "id": "wrong-cookie",
+      "request_hex": "00010000000000000102030405060708090a0b0c",
+      "source_address": "203.0.113.7",
+      "source_port": 54321,
+      "outcome": "drop"
+    },
+    {
+      "id": "invalid-length",
+      "request_hex": "000100042112a4420102030405060708090a0b0c",
+      "source_address": "203.0.113.7",
+      "source_port": 54321,
+      "outcome": "drop"
+    },
+    {
+      "id": "unsupported-method",
+      "request_hex": "000300002112a4420102030405060708090a0b0c",
+      "source_address": "203.0.113.7",
+      "source_port": 54321,
+      "outcome": "drop"
+    },
+    {
+      "id": "unknown-required",
+      "request_hex": "000100042112a4420102030405060708090a0b0c00010000",
+      "source_address": "203.0.113.7",
+      "source_port": 54321,
+      "outcome": "drop"
+    },
+    {
+      "id": "oversized",
+      "request_hex": "000100002112a4420102030405060708090a0b0c",
+      "append_zero_bytes": 1481,
+      "source_address": "203.0.113.7",
+      "source_port": 54321,
+      "outcome": "drop"
+    },
+    {
+      "id": "optional-attribute",
+      "request_hex": "000100042112a4420102030405060708090a0b0c80010000",
+      "source_address": "203.0.113.7",
+      "source_port": 54321,
+      "outcome": "success",
+      "response_hex": "0101000c2112a4420102030405060708090a0b0c002000080001f523ea12d545"
+    }
+  ]
+}
