@@ -55,6 +55,23 @@ Service Kit или приватного workspace, их credentials, код, wor
 
 ## Проверки владельца
 
+Корневой `go.mod` содержит сборочный каркас `cmd/stun/main.go`; это пустой main,
+без UDP handler и сетевого runtime. Публичный lint config — `.golangci-lint.yaml`.
+Из корня в Ubuntu 26.04 выполнять read-only базовый набор:
+
+```bash
+goimports -l .
+go vet ./...
+golangci-lint run --config .golangci-lint.yaml ./... --timeout 1m
+go test -short ./...
+govulncheck ./...
+```
+
+Непустой вывод `goimports -l` означает ошибку форматирования; исправления выполняются
+локально и просматриваются отдельно. Пустой main не получает бессодержательный unit
+test ради формального покрытия. Сборка Linux amd64 выполняется отдельно через
+`python3 -B scripts/ci.py build` после базовых проверок.
+
 [Локальный wire profile и vectors](api/README.md) задают стандартный UDP Binding.
 Из корня репозитория выполнить:
 
@@ -62,10 +79,11 @@ Service Kit или приватного workspace, их credentials, код, wor
 python3 -B api/test_wire_vectors.py
 ```
 
-Проверяются synthetic IPv4/IPv6/negative codec cases без UDP server; network IPv6,
-retransmit/rate limits и production host acceptance требуют отдельных проверок.
-В текущем checkout нет Go module или Protobuf RPC, Go/Buf checks неприменимы;
-не добавлять их ради формальности. STUN не TURN, не payload forwarding и не
+Проверяются synthetic IPv4/IPv6/negative codec cases без UDP server. Каталог `api/`
+остаётся wire/JSON-контрактом и offline fixtures: отдельного `api/go.mod` и
+Protobuf RPC в нём нет, Buf-проверка неприменима. Network IPv6, retransmit/rate
+limits и production host acceptance не проверяются базовым CI и относятся к
+отдельному этапу. STUN не TURN, не payload forwarding и не
 Account authority; публичный Binding не получает обязательный private SPIFFE
 include. Host provisioning/deploy/activation относятся к внешнему платформенному
 контуру вне активного состава, без передачи STUN или Service Kit; место и owner
@@ -77,7 +95,8 @@ include. Host provisioning/deploy/activation относятся к внешне�
 стабильного major новой линейки, включая patch. Изменения — hard cutover, без
 shims, dual API и fallback ради прошлых версий. Сохраняемые данные обновляются
 прямыми миграциями; скрытый reset запрещён. Runtime и api/v0.* версионируются
-независимо, first-party local replace и обход pin через GOWORK запрещены.
+независимо. Consumer закрепляет точную версию producer API; `@latest`, first-party
+local replace и обход pin через GOWORK запрещены.
 
 Профиль .ci/profile.json явно перечисляет все собственные модули и outputs.
 Базовый CI: format/lint, go vet, go test -short и govulncheck для Go, применимые
