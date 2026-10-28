@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
@@ -119,6 +120,16 @@ func (s *Server) Start(ctx context.Context) error {
 		return err
 	}
 	s.telemetry = t
+	level := slog.LevelInfo
+	switch s.config.LogLevel {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	}
+	t.logger = slog.New(&asyncHandler{queue: t.logs, drops: &s.stats.LogDropped, peak: &s.stats.LogPeak, level: level})
 	s.http = &http.Server{Handler: s.handler(), ErrorLog: log.New(io.Discard, "", 0), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 65536}
 	for _, u := range s.udp {
 		s.workers.Add(1)
@@ -140,7 +151,7 @@ func (s *Server) Start(ctx context.Context) error {
 func (s *Server) fail() {
 	s.failed.Store(true)
 	s.ready.Store(false)
-	s.telemetry.logger.Info("fatal")
+	s.telemetry.logger.Error("fatal")
 	if s.fatal != nil {
 		s.fatal()
 	}

@@ -15,12 +15,23 @@ func TestConfig(t *testing.T) {
 	if _, err := Parse([]string{"--listen", "127.0.0.1:1,[::1]:1,127.0.0.2:1,[::2]:1"}); err != nil {
 		t.Fatal(err)
 	}
+	for _, level := range []string{"debug", "info", "warn", "error"} {
+		c, err := Parse([]string{"--log-level", level, "--log-format", "json"})
+		if err != nil || c.LogLevel != level || c.LogFormat != "json" {
+			t.Fatal("logging config", c, err)
+		}
+	}
+	t.Setenv("ENDLESSNET_STUN_LOG_LEVEL", "warn")
+	if c, err := Parse([]string{"--log-level", "error"}); err != nil || c.LogLevel != "error" {
+		t.Fatal("logging flag precedence", c, err)
+	}
 	for _, args := range [][]string{
 		{"--listen", ""}, {"--listen", "localhost:3478"}, {"--listen", "127.0.0.1:0"},
 		{"--listen", "127.0.0.1:1,127.0.0.1:1"}, {"--listen", "127.0.0.1:1,[::1]:1,127.0.0.2:1,[::2]:1,[::3]:1"},
 		{"--http-listen", "0.0.0.0:8080"}, {"--http-listen", "localhost:8080"}, {"--listen", "[::ffff:127.0.0.1]:3478"},
 		{"--otel-endpoint", "http://user:secret@example.org"}, {"--otel-endpoint", "ftp://example.org"}, {"--otel-endpoint", "http://example.org?secret=1"},
 		{"--unknown"}, {"trailing"},
+		{"--log-level", "verbose"}, {"--log-format", "text"},
 	} {
 		if _, err := Parse(args); err == nil {
 			t.Fatal("accepted", args)

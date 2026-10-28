@@ -18,12 +18,14 @@
 используют отдельные sockets; ошибка одного обязательного bind отменяет весь старт.
 --http-listen по умолчанию 127.0.0.1:8080 и принимает только loopback IP.
 Flags перекрывают ENDLESSNET_STUN_LISTEN, ENDLESSNET_STUN_HTTP_LISTEN,
-ENDLESSNET_STUN_OTEL_ENDPOINT. Версия и проверка config не открывают sockets.
+ENDLESSNET_STUN_OTEL_ENDPOINT. --log-level / ENDLESSNET_STUN_LOG_LEVEL
+принимает debug/info/warn/error (default info); --log-format /
+ENDLESSNET_STUN_LOG_FORMAT принимает json (default). Версия и проверка config не открывают sockets.
 Некорректная конфигурация даёт exit2; startup/fatal failure — exit1; SIGINT/SIGTERM —
 bounded stop и exit0. Ошибки выводятся безопасными кодами без исходных addresses.
 
 Optional --otel-endpoint принимает явный полный OTLP HTTP URL, например
-http://127.0.0.1:4318/v1/traces. Без него внешнего экспорта нет. Ambient OTEL
+http://127.0.0.1:4318/v1/traces. Без него внешнего экспорта нет. Ambient OTEL resource attributes,
 endpoints/headers не заменяют явную конфигурацию; retries и redirects выключены,
 HTTPS требует TLS1.3. Экспортёр не является обязательной зависимостью Binding.
 

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"log/slog"
@@ -12,6 +13,45 @@ import (
 	sdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
+
+type testSink struct{ io.Writer }
+
+func (testSink) Close() error { return nil }
+
+func TestResourcePrivacyAndLogLevel(t *testing.T) {
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "secret=canary,client.ip=192.0.2.1")
+	t.Setenv("OTEL_SERVICE_NAME", "canary")
+	stats := &counters{}
+	tel := buildTelemetry(nil, testSink{Writer: io.Discard}, stats, sdk.AlwaysSample())
+	recorder := tracetest.NewSpanRecorder()
+	tel.provider.RegisterSpanProcessor(recorder)
+	_, span := tel.tracer.Start(context.Background(), "stun.binding")
+	span.End()
+	ended := recorder.Ended()
+	if len(ended) != 1 {
+		t.Fatal("missing span")
+	}
+	attrs := ended[0].Resource().Attributes()
+	if len(attrs) != 1 || string(attrs[0].Key) != "service.name" || attrs[0].Value.AsString() != "stun" {
+		t.Fatal("ambient resource", attrs)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := tel.close(ctx); err != nil {
+		t.Fatal(err)
+	}
+	q := make(chan string, 256)
+	h := &asyncHandler{queue: q, drops: &stats.LogDropped, peak: &stats.LogPeak, level: slog.LevelError}
+	logger := slog.New(h)
+	logger.Info("started")
+	logger.Error("fatal")
+	if len(q) != 1 {
+		t.Fatal("level filter")
+	}
+	if !bytes.Contains([]byte(<-q), []byte(`"level":"ERROR"`)) {
+		t.Fatal("wrong event level")
+	}
+}
 
 type blockedSink struct {
 	start chan struct{}

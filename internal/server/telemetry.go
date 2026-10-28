@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -15,6 +16,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/sdk/resource"
 	sdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -29,9 +31,10 @@ type asyncHandler struct {
 	queue chan string
 	drops *atomic.Uint64
 	peak  *atomic.Int64
+	level slog.Level
 }
 
-func (h *asyncHandler) Enabled(context.Context, slog.Level) bool { return true }
+func (h *asyncHandler) Enabled(_ context.Context, level slog.Level) bool { return level >= h.level }
 func (h *asyncHandler) Handle(_ context.Context, r slog.Record) error {
 	// Callers supply only fixed event names; arbitrary error/attribute values never leave this boundary.
 	event := "packet"
@@ -50,7 +53,7 @@ func (h *asyncHandler) Handle(_ context.Context, r slog.Record) error {
 		}
 		return true
 	})
-	line := fmt.Sprintf("{\"level\":\"INFO\",\"service\":\"stun\",\"component\":\"server\",\"event\":\"%s\",\"trace_id\":\"%s\"}\n", event, correlation)
+	line := fmt.Sprintf("{\"level\":\"%s\",\"service\":\"stun\",\"component\":\"server\",\"event\":\"%s\",\"trace_id\":\"%s\"}\n", r.Level.String(), event, correlation)
 	select {
 	case h.queue <- line:
 		updatePeak(h.peak, int64(len(h.queue)))
@@ -171,6 +174,7 @@ type telemetry struct {
 }
 
 func newTelemetry(ctx context.Context, endpoint string, sink io.WriteCloser, stats *counters) (*telemetry, error) {
+	clearAmbientTelemetry()
 	var exporter sdk.SpanExporter
 	if endpoint != "" {
 		var err error
@@ -184,10 +188,11 @@ func newTelemetry(ctx context.Context, endpoint string, sink io.WriteCloser, sta
 }
 
 func buildTelemetry(exporter sdk.SpanExporter, sink io.WriteCloser, stats *counters, sampler sdk.Sampler) *telemetry {
+	clearAmbientTelemetry()
 	p := &processor{queue: make(chan sdk.ReadOnlySpan, 1024), stats: stats, exporter: exporter, stop: make(chan struct{}), done: make(chan struct{})}
 	t := &telemetry{stats: stats, processor: p, logs: make(chan string, 256), stop: make(chan struct{}), done: make(chan struct{}), sink: sink, logTokens: 20, logTime: time.Now()}
 	t.logger = slog.New(&asyncHandler{queue: t.logs, drops: &stats.LogDropped, peak: &stats.LogPeak})
-	t.provider = sdk.NewTracerProvider(sdk.WithSampler(sampler), sdk.WithSpanProcessor(p), sdk.WithRawSpanLimits(sdk.SpanLimits{AttributeCountLimit: 4, AttributeValueLengthLimit: 64, EventCountLimit: 0, LinkCountLimit: 0, AttributePerEventCountLimit: 0, AttributePerLinkCountLimit: 0}))
+	t.provider = sdk.NewTracerProvider(sdk.WithResource(resource.NewSchemaless(attribute.String("service.name", "stun"))), sdk.WithSampler(sampler), sdk.WithSpanProcessor(p), sdk.WithRawSpanLimits(sdk.SpanLimits{AttributeCountLimit: 4, AttributeValueLengthLimit: 64, EventCountLimit: 0, LinkCountLimit: 0, AttributePerEventCountLimit: 0, AttributePerLinkCountLimit: 0}))
 	t.tracer = t.provider.Tracer("stun")
 	go p.run()
 	go func() {
@@ -202,6 +207,18 @@ func buildTelemetry(exporter sdk.SpanExporter, sink io.WriteCloser, stats *count
 		}
 	}()
 	return t
+}
+
+// The standalone process owns telemetry configuration. SDK 1.47 merges resource
+// environment attributes even with WithResource, so remove ambient SDK inputs
+// before constructing providers/exporters. This changes only this process's env.
+func clearAmbientTelemetry() {
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(name, "OTEL_") {
+			_ = os.Unsetenv(name)
+		}
+	}
 }
 
 func (t *telemetry) packet(code string) {
