@@ -55,8 +55,8 @@ Service Kit или приватного workspace, их credentials, код, wor
 
 ## Проверки владельца
 
-Корневой `go.mod` содержит сборочный каркас `cmd/stun/main.go`; это пустой main,
-без UDP handler и сетевого runtime. Публичный lint config — `.golangci-lint.yaml`.
+Корневой `go.mod` содержит самостоятельный runtime `cmd/stun/main.go` и
+`internal/server`: bounded UDP Binding, lifecycle, limiter и diagnostics. Публичный lint config — `.golangci-lint.yaml`.
 Из корня в Ubuntu 26.04 выполнять read-only базовый набор:
 
 ```bash
@@ -102,11 +102,25 @@ local replace и обход pin через GOWORK запрещены.
 Базовый CI: format/lint, go vet, go test -short и govulncheck для Go, применимые
 Dart/JSON unit/static checks. Integration/E2E и тесты прежних версий в обязательный
 MVP gate не входят. Отсутствие unit cases у пустого main фиксируется без выдуманного
-покрытия. Собираемый пустой main явно запрошен пользователем для проверки поставки;
-он не реализует доменную логику, БД, handlers или сетевой runtime.
+покрытия. Runtime008 реализует стандартный UDP Binding, bounded lifecycle и diagnostics;
+базовые unit/static проверки не заменяют отдельные real-socket/load suites.
 
 Автономные команды: python3 -B scripts/ci.py check и build; unit tooling — scripts/test_ci.py.
 Kit не загружается, собственные публичные lint configs остаются у владельца.
 Release допускается только по push обычного v0-тега после exact commit checks и
 сборки. API-тег выбирает только source/SDK, runtime-тег — runtime outputs.
 Spec Kit и общая конституция находятся только в workspace.
+
+
+## Runtime008 — дополнительные команды
+
+Текущий runtime следует малому профилю в README.md. При изменении server code
+выполнить meaningful unit tests и обязательный baseline выше. Отдельная приёмка:
+go test -race -tags=integration ./internal/server -timeout=40s;
+go build -o /tmp/stun-runtime ./cmd/stun;
+STUN_BINARY=/tmp/stun-runtime python3 -B test/acceptance/process_test.py;
+bash test/acceptance/run.sh (полный860s профиль, изолированный network namespace).
+Эти suites не входят в обязательный short CI и не подтверждают внешнюю сеть.
+Новый runtime tag разрешён только после successful main CI exact commit;
+main ancestry и CI проверяются publisher. Runtime/API и внешняя системная
+приёмка сохраняют раздельный статус.

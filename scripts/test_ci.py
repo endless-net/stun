@@ -244,6 +244,7 @@ class PublicCI(unittest.TestCase):
             with patch.dict(os.environ, {
                 "GITHUB_EVENT_NAME": "push", "GITHUB_REF": "refs/tags/v0.1.0",
                 "GITHUB_REPOSITORY": "endless-net/fixture"}, clear=True), patch.object(
+                    ci, "require_main"), patch.object(
                     ci, "remote_tag", return_value="a" * 40), patch.object(
                     ci, "clean_commit", return_value="a" * 40), patch.object(
                     ci, "validate_output_location", return_value=output), patch.object(
@@ -313,6 +314,24 @@ class PublicCI(unittest.TestCase):
             path.write_text('{"valid": true, "valid": false}')
             with self.assertRaisesRegex(ValueError, "duplicate JSON key"):
                 ci.load_json(path)
+
+    def test_main_gate_requires_exact_successful_push(self):
+        for runs in ([], [{"headSha": "b" * 40, "status": "completed", "conclusion": "success"}],
+                     [{"headSha": "a" * 40, "status": "completed", "conclusion": "failure"}],
+                     [{"headSha": "a" * 40, "status": "in_progress", "conclusion": None}]):
+            with self.subTest(runs=runs), patch.object(ci, "command", side_effect=["", "", json.dumps(runs)]):
+                with self.assertRaisesRegex(ValueError, "main push CI"):
+                    ci.require_main(Path("."), "endless-net/fixture", "a" * 40)
+        with patch.object(ci, "command", side_effect=["", "", json.dumps([
+                {"headSha": "a" * 40, "status": "completed", "conclusion": "success"}])]) as command:
+            ci.require_main(Path("."), "endless-net/fixture", "a" * 40)
+            self.assertEqual(command.call_args_list[0].args[0], ["git", "fetch", "--no-tags", "origin", "main"])
+            self.assertIn("--is-ancestor", command.call_args_list[1].args[0])
+
+    def test_main_gate_rejects_unmerged_commit(self):
+        with patch.object(ci, "command", side_effect=["", subprocess.CalledProcessError(1, "git merge-base")]):
+            with self.assertRaises(subprocess.CalledProcessError):
+                ci.require_main(Path("."), "endless-net/fixture", "a" * 40)
 
 
 if __name__ == "__main__":

@@ -350,6 +350,19 @@ def remote_tag(root, tag):
     return refs.get("refs/tags/" + tag + "^{}", refs.get("refs/tags/" + tag))
 
 
+def require_main(root, repository, sha):
+    """A fresh main and its successful push CI must precede a new runtime release."""
+    command(["git", "fetch", "--no-tags", "origin", "main"], cwd=root)
+    command(["git", "merge-base", "--is-ancestor", sha, "FETCH_HEAD"], cwd=root)
+    runs = json.loads(command([
+        "gh", "run", "list", "--repo", repository, "--branch", "main",
+        "--event", "push", "--commit", sha, "--workflow", "ci.yml",
+        "--json", "headSha,status,conclusion", "--limit", "20"], cwd=root, capture=True))
+    if not any(run.get("headSha") == sha and run.get("status") == "completed"
+               and run.get("conclusion") == "success" for run in runs):
+        raise ValueError("exact main push CI has not succeeded")
+
+
 def publish(root, profile, output, tag, sha):
     if not TAG.fullmatch(tag) or not re.fullmatch(r"[a-f0-9]{40}", sha):
         raise ValueError("invalid release identity")
@@ -363,6 +376,7 @@ def publish(root, profile, output, tag, sha):
     repository = os.environ.get("GITHUB_REPOSITORY", "")
     if not re.fullmatch(r"endless-net/[a-z][a-z0-9-]*", repository):
         raise ValueError("repository identity missing")
+    require_main(root, repository, sha)
     # gh release view resolves both published tags and pending draft tags.
     view_args = ["gh", "release", "view", tag, "--repo", repository, "--json",
                  "tagName,targetCommitish,isDraft,isPrerelease,assets"]
