@@ -22,7 +22,10 @@ func TestResourcePrivacyAndLogLevel(t *testing.T) {
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "secret=canary,client.ip=192.0.2.1")
 	t.Setenv("OTEL_SERVICE_NAME", "canary")
 	stats := &counters{}
-	tel := buildTelemetry(nil, testSink{Writer: io.Discard}, stats, sdk.AlwaysSample())
+	tel := buildTelemetry(nil, slog.LevelError, testSink{Writer: io.Discard}, stats, sdk.AlwaysSample())
+	if tel.logger.Enabled(context.Background(), slog.LevelInfo) || !tel.logger.Enabled(context.Background(), slog.LevelError) {
+		t.Fatal("telemetry logger level")
+	}
 	recorder := tracetest.NewSpanRecorder()
 	tel.provider.RegisterSpanProcessor(recorder)
 	_, span := tel.tracer.Start(context.Background(), "stun.binding")
@@ -88,7 +91,7 @@ func TestBoundedLogPrivacy(t *testing.T) {
 func TestBlockedLogStop(t *testing.T) {
 	sink := &blockedSink{start: make(chan struct{}), done: make(chan struct{})}
 	stats := &counters{}
-	tel, err := newTelemetry(context.Background(), "", sink, stats)
+	tel, err := newTelemetry(context.Background(), "", slog.LevelInfo, sink, stats)
 	if err != nil {
 		t.Fatal(err)
 	}

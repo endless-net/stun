@@ -159,7 +159,6 @@ func (p *processor) run() {
 }
 
 type telemetry struct {
-	stats     *counters
 	logger    *slog.Logger
 	provider  *sdk.TracerProvider
 	tracer    trace.Tracer
@@ -173,7 +172,7 @@ type telemetry struct {
 	logTokens float64
 }
 
-func newTelemetry(ctx context.Context, endpoint string, sink io.WriteCloser, stats *counters) (*telemetry, error) {
+func newTelemetry(ctx context.Context, endpoint string, level slog.Level, sink io.WriteCloser, stats *counters) (*telemetry, error) {
 	clearAmbientTelemetry()
 	var exporter sdk.SpanExporter
 	if endpoint != "" {
@@ -184,14 +183,14 @@ func newTelemetry(ctx context.Context, endpoint string, sink io.WriteCloser, sta
 			return nil, fmt.Errorf("telemetry_init")
 		}
 	}
-	return buildTelemetry(exporter, sink, stats, sdk.TraceIDRatioBased(0.01)), nil
+	return buildTelemetry(exporter, level, sink, stats, sdk.TraceIDRatioBased(0.01)), nil
 }
 
-func buildTelemetry(exporter sdk.SpanExporter, sink io.WriteCloser, stats *counters, sampler sdk.Sampler) *telemetry {
+func buildTelemetry(exporter sdk.SpanExporter, level slog.Level, sink io.WriteCloser, stats *counters, sampler sdk.Sampler) *telemetry {
 	clearAmbientTelemetry()
 	p := &processor{queue: make(chan sdk.ReadOnlySpan, 1024), stats: stats, exporter: exporter, stop: make(chan struct{}), done: make(chan struct{})}
-	t := &telemetry{stats: stats, processor: p, logs: make(chan string, 256), stop: make(chan struct{}), done: make(chan struct{}), sink: sink, logTokens: 20, logTime: time.Now()}
-	t.logger = slog.New(&asyncHandler{queue: t.logs, drops: &stats.LogDropped, peak: &stats.LogPeak})
+	t := &telemetry{processor: p, logs: make(chan string, 256), stop: make(chan struct{}), done: make(chan struct{}), sink: sink, logTokens: 20, logTime: time.Now()}
+	t.logger = slog.New(&asyncHandler{queue: t.logs, drops: &stats.LogDropped, peak: &stats.LogPeak, level: level})
 	t.provider = sdk.NewTracerProvider(sdk.WithResource(resource.NewSchemaless(attribute.String("service.name", "stun"))), sdk.WithSampler(sampler), sdk.WithSpanProcessor(p), sdk.WithRawSpanLimits(sdk.SpanLimits{AttributeCountLimit: 4, AttributeValueLengthLimit: 64, EventCountLimit: 0, LinkCountLimit: 0, AttributePerEventCountLimit: 0, AttributePerLinkCountLimit: 0}))
 	t.tracer = t.provider.Tracer("stun")
 	go p.run()

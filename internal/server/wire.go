@@ -6,22 +6,23 @@ import (
 	"net/netip"
 )
 
-func binding(b []byte, source netip.AddrPort) ([]byte, string) {
-	if len(b) < 20 || len(b) > 1500 {
-		return nil, "invalid"
+const maxDatagramSize = 1500
+
+func binding(b []byte, source netip.AddrPort) []byte {
+	if len(b) < 20 || len(b) > maxDatagramSize {
+		return nil
 	}
 	if binary.BigEndian.Uint16(b) != 1 || binary.BigEndian.Uint32(b[4:]) != 0x2112a442 || int(binary.BigEndian.Uint16(b[2:])) != len(b)-20 || len(b)%4 != 0 {
-		return nil, "invalid"
+		return nil
 	}
+	// Both the request length and every attribute offset are 4-byte aligned.
+	// A remaining attribute therefore has room for its 4-byte header.
 	for off := 20; off < len(b); {
-		if off+4 > len(b) {
-			return nil, "invalid"
-		}
 		kind := binary.BigEndian.Uint16(b[off:])
 		n := int(binary.BigEndian.Uint16(b[off+2:]))
 		off += 4 + (n+3)/4*4
 		if kind < 0x8000 || off > len(b) {
-			return nil, "invalid"
+			return nil
 		}
 	}
 	ip := source.Addr().Unmap()
@@ -41,5 +42,5 @@ func binding(b []byte, source netip.AddrPort) ([]byte, string) {
 	for i, v := range ip.AsSlice() {
 		out[28+i] = v ^ mask[i]
 	}
-	return out, "success"
+	return out
 }

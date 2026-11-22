@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
@@ -71,8 +72,8 @@ func TestLoadChild(t *testing.T) {
 	exporter := &faultExporter{}
 	sink := &switchSink{stop: make(chan struct{})}
 	s := New(Config{Listen: os.Getenv("STUN_TEST_UDP"), HTTP: os.Getenv("STUN_TEST_HTTP")}, sink, func() {})
-	s.telemetryNew = func(_ context.Context, _ string, w io.WriteCloser, c *counters) (*telemetry, error) {
-		return buildTelemetry(exporter, w, c, sdk.AlwaysSample()), nil
+	s.telemetryNew = func(_ context.Context, _ string, level slog.Level, w io.WriteCloser, c *counters) (*telemetry, error) {
+		return buildTelemetry(exporter, level, w, c, sdk.AlwaysSample()), nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	if err := s.Start(ctx); err != nil {

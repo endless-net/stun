@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"log/slog"
 	"net/netip"
 	"net/url"
 	"strings"
@@ -43,39 +44,61 @@ func Parse(args []string) (Config, error) {
 	if c.Version {
 		return c, nil
 	}
-	return c, c.validate()
+	_, err := c.validate()
+	return c, err
 }
 
-func (c Config) validate() error {
+type validatedConfig struct {
+	udp      []socketAddress
+	http     socketAddress
+	logLevel slog.Level
+}
+
+type socketAddress struct {
+	text string
+	ipv6 bool
+}
+
+func (c Config) validate() (validatedConfig, error) {
+	var validated validatedConfig
 	switch c.LogLevel {
-	case "", "debug", "info", "warn", "error":
+	case "", "info":
+		validated.logLevel = slog.LevelInfo
+	case "debug":
+		validated.logLevel = slog.LevelDebug
+	case "warn":
+		validated.logLevel = slog.LevelWarn
+	case "error":
+		validated.logLevel = slog.LevelError
 	default:
-		return errors.New("config_log_level")
+		return validatedConfig{}, errors.New("config_log_level")
 	}
 	if c.LogFormat != "" && c.LogFormat != "json" {
-		return errors.New("config_log_format")
+		return validatedConfig{}, errors.New("config_log_format")
 	}
 	addresses := strings.Split(c.Listen, ",")
-	if len(addresses) < 1 || len(addresses) > 4 {
-		return errors.New("config_listeners")
+	if len(addresses) > 4 {
+		return validatedConfig{}, errors.New("config_listeners")
 	}
 	seen := map[netip.AddrPort]bool{}
 	for _, s := range addresses {
 		a, err := netip.ParseAddrPort(s)
 		if err != nil || a.Port() == 0 || a.Addr().Zone() != "" || a.Addr().Is4In6() || seen[a] {
-			return errors.New("config_listener")
+			return validatedConfig{}, errors.New("config_listener")
 		}
 		seen[a] = true
+		validated.udp = append(validated.udp, socketAddress{text: s, ipv6: a.Addr().Is6()})
 	}
 	a, err := netip.ParseAddrPort(c.HTTP)
 	if err != nil || a.Port() == 0 || !a.Addr().IsLoopback() || a.Addr().Zone() != "" || a.Addr().Is4In6() {
-		return errors.New("config_http")
+		return validatedConfig{}, errors.New("config_http")
 	}
+	validated.http = socketAddress{text: c.HTTP, ipv6: a.Addr().Is6()}
 	if c.Endpoint != "" {
 		u, err := url.Parse(c.Endpoint)
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-			return errors.New("config_exporter")
+			return validatedConfig{}, errors.New("config_exporter")
 		}
 	}
-	return nil
+	return validated, nil
 }

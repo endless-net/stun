@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -226,7 +227,7 @@ func TestExplicitExporterEnvironment(t *testing.T) {
 			}))
 			defer collector.Close()
 			stats := &counters{}
-			tel, err := newTelemetry(context.Background(), collector.URL+"/v1/traces", discardSink{}, stats)
+			tel, err := newTelemetry(context.Background(), collector.URL+"/v1/traces", slog.LevelInfo, discardSink{}, stats)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -18,13 +18,13 @@ func request() []byte {
 func TestWire(t *testing.T) {
 	for _, source := range []string{"192.0.2.1:40000", "[2001:db8::1]:54321"} {
 		addr := netip.MustParseAddrPort(source)
-		b, code := binding(request(), addr)
+		b := binding(request(), addr)
 		want := 32
 		if addr.Addr().Is6() {
 			want = 44
 		}
-		if code != "success" || len(b) != want {
-			t.Fatalf("%s: %s %x", source, code, b)
+		if len(b) != want {
+			t.Fatalf("%s: unexpected response %x", source, b)
 		}
 		if string(b[8:20]) != "abcdefghijkl" || binary.BigEndian.Uint16(b[26:28])^0x2112 != addr.Port() {
 			t.Fatal("transaction/port")
@@ -40,8 +40,8 @@ func TestWire(t *testing.T) {
 	good := request()
 	optional := append(request(), 0x80, 1, 0, 1, 42, 9, 8, 7)
 	binary.BigEndian.PutUint16(optional[2:], 8)
-	if _, code := binding(optional, netip.MustParseAddrPort("127.0.0.1:1")); code != "success" {
-		t.Fatal(code)
+	if binding(optional, netip.MustParseAddrPort("127.0.0.1:1")) == nil {
+		t.Fatal("optional attribute rejected")
 	}
 	large := append(request(), make([]byte, 1480)...)
 	large[20] = 0x80
@@ -60,12 +60,12 @@ func TestWire(t *testing.T) {
 	binary.BigEndian.PutUint16(broken[2:], 4)
 	cases = append(cases, broken)
 	for _, b := range cases {
-		if out, code := binding(b, netip.MustParseAddrPort("127.0.0.1:1")); out != nil || code == "success" {
+		if binding(b, netip.MustParseAddrPort("127.0.0.1:1")) != nil {
 			t.Fatalf("accepted %x", b)
 		}
 	}
-	if _, code := binding(large, netip.MustParseAddrPort("127.0.0.1:1")); code != "success" {
-		t.Fatal("1500 bound", code)
+	if binding(large, netip.MustParseAddrPort("127.0.0.1:1")) == nil {
+		t.Fatal("1500-byte request rejected")
 	}
 }
 

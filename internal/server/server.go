@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -42,7 +41,7 @@ type Server struct {
 	workers      sync.WaitGroup
 	fatal        func()
 	sink         io.WriteCloser
-	telemetryNew func(context.Context, string, io.WriteCloser, *counters) (*telemetry, error)
+	telemetryNew func(context.Context, string, slog.Level, io.WriteCloser, *counters) (*telemetry, error)
 }
 
 // New returns an unstarted server; failures never log configuration values.
@@ -60,7 +59,8 @@ func App(c Config, sink io.WriteCloser) *fx.App {
 
 // Start acquires every mandatory socket before starting workers/readiness.
 func (s *Server) Start(ctx context.Context) error {
-	if err := s.config.validate(); err != nil {
+	config, err := s.config.validate()
+	if err != nil {
 		return err
 	}
 	lc := net.ListenConfig{}
@@ -72,13 +72,12 @@ func (s *Server) Start(ctx context.Context) error {
 			_ = s.listener.Close()
 		}
 	}
-	for _, text := range strings.Split(s.config.Listen, ",") {
-		a := netip.MustParseAddrPort(text)
+	for _, a := range config.udp {
 		network := "udp4"
-		if a.Addr().Is6() {
+		if a.ipv6 {
 			network = "udp6"
 		}
-		conn, err := lc.ListenPacket(ctx, network, text)
+		conn, err := lc.ListenPacket(ctx, network, a.text)
 		if err != nil {
 			rollback()
 			return errors.New("udp_bind")
@@ -90,7 +89,7 @@ func (s *Server) Start(ctx context.Context) error {
 			return errors.New("udp_socket")
 		}
 		u := &udpListener{conn: udp, limit: newLimiter()}
-		if a.Addr().Is6() {
+		if a.ipv6 {
 			u.v6 = ipv6.NewPacketConn(udp)
 			err = u.v6.SetControlMessage(ipv6.FlagDst, true)
 		} else {
@@ -105,31 +104,21 @@ func (s *Server) Start(ctx context.Context) error {
 		s.udp = append(s.udp, u)
 	}
 	network := "tcp4"
-	if netip.MustParseAddrPort(s.config.HTTP).Addr().Is6() {
+	if config.http.ipv6 {
 		network = "tcp6"
 	}
-	ln, err := lc.Listen(ctx, network, s.config.HTTP)
+	ln, err := lc.Listen(ctx, network, config.http.text)
 	if err != nil {
 		rollback()
 		return errors.New("http_bind")
 	}
 	s.listener = &cappedListener{Listener: ln, stats: &s.stats}
-	t, err := s.telemetryNew(ctx, s.config.Endpoint, s.sink, &s.stats)
+	t, err := s.telemetryNew(ctx, s.config.Endpoint, config.logLevel, s.sink, &s.stats)
 	if err != nil {
 		rollback()
 		return err
 	}
 	s.telemetry = t
-	level := slog.LevelInfo
-	switch s.config.LogLevel {
-	case "debug":
-		level = slog.LevelDebug
-	case "warn":
-		level = slog.LevelWarn
-	case "error":
-		level = slog.LevelError
-	}
-	t.logger = slog.New(&asyncHandler{queue: t.logs, drops: &s.stats.LogDropped, peak: &s.stats.LogPeak, level: level})
 	s.http = &http.Server{Handler: s.handler(), ErrorLog: log.New(io.Discard, "", 0), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 65536}
 	for _, u := range s.udp {
 		s.workers.Add(1)
@@ -158,7 +147,7 @@ func (s *Server) fail() {
 }
 
 func (s *Server) serveUDP(u *udpListener) {
-	buf := make([]byte, 1501)
+	buf := make([]byte, maxDatagramSize+1)
 	for {
 		n, source, destination, err := u.read(buf)
 		if err != nil {
@@ -173,15 +162,7 @@ func (s *Server) serveUDP(u *udpListener) {
 		s.stats.Received.Add(1)
 		code := "limited"
 		if u.limit.allow(source.Addr(), time.Now()) {
-			var out []byte
-			out, code = binding(buf[:n], source)
-			if out != nil {
-				if err := u.conn.SetWriteDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
-					code = "write_error"
-				} else if err := u.write(out, source, destination); err != nil {
-					code = "write_error"
-				}
-			}
+			code = u.reply(buf[:n], source, destination)
 		}
 		count := len(u.limit.sources)
 		s.stats.Buckets.Add(int64(count - u.buckets))
@@ -198,6 +179,18 @@ func (s *Server) serveUDP(u *udpListener) {
 		}
 		s.telemetry.packet(code)
 	}
+}
+
+func (u *udpListener) reply(request []byte, source netip.AddrPort, destination net.IP) string {
+	out := binding(request, source)
+	if out == nil {
+		return "invalid"
+	}
+	if u.conn.SetWriteDeadline(time.Now().Add(100*time.Millisecond)) != nil ||
+		u.write(out, source, destination) != nil {
+		return "write_error"
+	}
+	return "success"
 }
 
 // Reply from the address that received the datagram, including wildcard sockets.
