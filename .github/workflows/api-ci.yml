@@ -1,0 +1,29 @@
+name: API build verification
+on:
+  push:
+    branches: ['main']
+    paths:
+      - 'api/**'
+      - '.ci/profile.json'
+      - '.github/workflows/api-ci.yml'
+      - '.github/workflows/ci.yml'
+      - 'scripts/check-api-build.sh'
+      - 'scripts/ci/**'
+      - 'go.mod'
+      - 'go.sum'
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.4'
+          cache: false
+      - name: Verify API build against contract
+        run: bash scripts/check-api-build.sh
