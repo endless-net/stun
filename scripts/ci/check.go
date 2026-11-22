@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"slices"
 	"strings"
 )
 
@@ -67,13 +66,21 @@ func (r runner) checkGo(ctx context.Context, where, config string, goOnly bool) 
 	}
 	packages := []string{"./..."}
 	if goOnly {
-		listed, err := r.run(ctx, where, env, "go", "list", "./...")
+		listed, err := r.run(ctx, where, env, "go", "list", "-f", "{{.Dir}}", "./...")
 		if err != nil {
 			return err
 		}
-		packages = slices.DeleteFunc(strings.Fields(string(listed)), func(pkg string) bool {
-			return pkg == "github.com/endless-net/stun/api"
-		})
+		packages = nil
+		for _, dir := range strings.Split(strings.TrimSpace(string(listed)), "\n") {
+			relative, err := filepath.Rel(where, strings.TrimSpace(dir))
+			if err != nil {
+				return err
+			}
+			relative = filepath.ToSlash(relative)
+			if relative != "api" && !strings.HasPrefix(relative, "api/") {
+				packages = append(packages, "./"+relative)
+			}
+		}
 		if len(packages) == 0 {
 			return errors.New("no runtime Go packages found")
 		}
