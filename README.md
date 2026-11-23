@@ -52,11 +52,11 @@ transaction bytes, payload или raw net errors; локально создан�
 
 ## Проверки и выпуск
 
-Из корня в Ubuntu26.04 с Go1.27.3 и pinned tools:
+Из корня в Ubuntu 26.04 с Go 1.27.4 и закреплёнными версиями инструментов:
 
 ```bash
-python3 -B scripts/test_ci.py
-python3 -B scripts/ci.py check
+go test -short ./scripts/ci
+go run ./scripts/ci check
 go test -race -short ./...
 ```
 
@@ -76,7 +76,7 @@ namespaces, unshare и iproute2. Test-only sampler100% при том же cap100
 для достижения queue pressure; production flag для него отсутствует.
 WSL Ubuntu userland и loopback не подтверждают production kernel/NAT/регионы.
 
-Clean committed build: python3 -B scripts/ci.py build. Профиль модулей/артефактов
+Сборка из чистой рабочей копии: `go run ./scripts/ci build`. Профиль модулей и артефактов
 в [.ci/profile.json](.ci/profile.json); output — ignored .artifacts или вне checkout.
 Public CI автономен, GitHub-hosted Ubuntu26.04, без private Service Kit.
 Изменения публикуются только в main; новый runtime v0.* tag ставится после successful

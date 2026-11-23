@@ -20,11 +20,10 @@ import (
 )
 
 type udpListener struct {
-	conn    *net.UDPConn
-	v4      *ipv4.PacketConn
-	v6      *ipv6.PacketConn
-	limit   *limiter
-	buckets int
+	conn  *net.UDPConn
+	v4    *ipv4.PacketConn
+	v6    *ipv6.PacketConn
+	limit *limiter
 }
 
 // Server owns its sockets, workers and telemetry for one lifecycle.
@@ -160,13 +159,14 @@ func (s *Server) serveUDP(u *udpListener) {
 			return
 		}
 		s.stats.Received.Add(1)
+		before := len(u.limit.sources)
 		code := "limited"
 		if u.limit.allow(source.Addr(), time.Now()) {
 			code = u.reply(buf[:n], source, destination)
 		}
-		count := len(u.limit.sources)
-		s.stats.Buckets.Add(int64(count - u.buckets))
-		u.buckets = count
+		if delta := len(u.limit.sources) - before; delta != 0 {
+			s.stats.Buckets.Add(int64(delta))
+		}
 		switch code {
 		case "limited":
 			s.stats.Limited.Add(1)
