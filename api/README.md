@@ -35,11 +35,12 @@ method, unknown required attribute, oversized packet. TEST-NET адреса и
 transaction ID — публичные fixtures, не реальные endpoints или credentials.
 
 ```bash
-python3 -B api/test_wire_vectors.py
+go test -short ./api
 ```
 
-Команда выполняется из корня STUN; тест не запускает UDP server. Он проверяет
-стандартный header, negative disposition и независимо декодирует XOR mapping.
+Команда выполняется из корня STUN. В распакованном API-архиве запустите
+`go test -short wire_vectors_test.go`. Тест проверяет стандартный header,
+negative disposition и независимо декодирует XOR mapping без запуска UDP server.
 Production rate limits, IPv6 host acceptance и client retry schedule требуют
 отдельной реализации/приёмки. Host lifecycle, provisioning/deploy/activation
 относятся к внешнему платформенному контуру и здесь не реализуются. Его место

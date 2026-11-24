@@ -70,13 +70,13 @@ govulncheck ./...
 Непустой вывод `goimports -l` означает ошибку форматирования; исправления выполняются
 локально и просматриваются отдельно. Пустой main не получает бессодержательный unit
 test ради формального покрытия. Сборка Linux amd64 выполняется отдельно через
-`python3 -B scripts/ci.py build` после базовых проверок.
+`go run ./scripts/ci build` после базовых проверок.
 
 [Локальный wire profile и vectors](api/README.md) задают стандартный UDP Binding.
 Из корня репозитория выполнить:
 
 ```bash
-python3 -B api/test_wire_vectors.py
+go test -short ./api
 ```
 
 Проверяются synthetic IPv4/IPv6/negative codec cases без UDP server. Каталог `api/`
@@ -99,16 +99,19 @@ shims, dual API и fallback ради прошлых версий. Сохраня
 local replace и обход pin через GOWORK запрещены.
 
 Профиль .ci/profile.json явно перечисляет все собственные модули и outputs.
-Базовый CI: format/lint, go vet, go test -short и govulncheck для Go, применимые
-Dart/JSON unit/static checks. Integration/E2E и тесты прежних версий в обязательный
+На push в `main` Go CI запускает `go test -short`, `govulncheck` и
+`golangci-lint` для Go-кода приложения и инструментов. Workflow `api-ci.yml`
+сверяет сборку API с исходным контрактом. Проверки Dart/JSON выполняются отдельно. Integration/E2E и тесты прежних версий в обязательный
 MVP gate не входят. Отсутствие unit cases у пустого main фиксируется без выдуманного
 покрытия. Runtime008 реализует стандартный UDP Binding, bounded lifecycle и diagnostics;
 базовые unit/static проверки не заменяют отдельные real-socket/load suites.
 
-Автономные команды: python3 -B scripts/ci.py check и build; unit tooling — scripts/test_ci.py.
+Автономные команды — `go run ./scripts/ci check`, `go run ./scripts/ci build`
+и `go test -short ./scripts/ci`. Код CI хранится локально в `scripts/ci/`.
 Kit не загружается, собственные публичные lint configs остаются у владельца.
-Release допускается только по push обычного v0-тега после exact commit checks и
-сборки. API-тег выбирает только source/SDK, runtime-тег — runtime outputs.
+Тег runtime использует успешный Go CI, тег API — успешную сверку сборки API.
+В обоих случаях workflow сверяет результат на том же SHA, собирает артефакты
+и публикует выпуск. API-тег выбирает только source/SDK, runtime-тег — runtime outputs.
 Spec Kit и общая конституция находятся только в workspace.
 
 
@@ -118,7 +121,7 @@ Spec Kit и общая конституция находятся только в
 выполнить meaningful unit tests и обязательный baseline выше. Отдельная приёмка:
 go test -race -tags=integration ./internal/server -timeout=40s;
 go build -o /tmp/stun-runtime ./cmd/stun;
-STUN_BINARY=/tmp/stun-runtime python3 -B test/acceptance/process_test.py;
+STUN_BINARY=/tmp/stun-runtime go test -count=1 -tags=acceptance -timeout=30s ./test/acceptance;
 bash test/acceptance/run.sh (полный860s профиль, изолированный network namespace).
 Эти suites не входят в обязательный short CI и не подтверждают внешнюю сеть.
 Новый runtime tag разрешён только после successful main CI exact commit;
